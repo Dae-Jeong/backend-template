@@ -11,6 +11,7 @@ from template_api.bootstrap.lifespan import (
 )
 from template_api.core.clock import system_clock
 from template_api.core.contracts import Clock, LogContext
+from template_api.core.database_metrics import create_database_metrics
 from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
 from template_api.http.errors import (
@@ -29,16 +30,24 @@ def create_app(
     settings: Settings,
     *,
     clock: Clock = system_clock,
-    prepare: PrepareResources = prepare_resources,
+    prepare: PrepareResources | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.service_version,
-        lifespan=create_lifespan(prepare),
+        lifespan=create_lifespan(
+            prepare
+            if prepare is not None
+            else partial(prepare_resources, settings=settings)
+        ),
     )
     app.state.clock = clock
     app.state.ready = False
     app.state.metrics = create_metrics()
+    if settings.db_primary_url:
+        app.state.database_metrics = create_database_metrics(
+            app.state.metrics, settings.db_pool_size + settings.db_pool_max_overflow
+        )
     app.state.log_context = LogContext(
         settings.app_name, settings.service_version, settings.app_environment
     )

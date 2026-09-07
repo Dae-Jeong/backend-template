@@ -7,7 +7,21 @@ Status: 최소 HTTP 앱·환경 설정·패키지 빌드 검증 · 2026-09-07
 FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 `src/template_api/`가 애플리케이션 코드의 시작점입니다.
 
-## 폴더 구조
+## 선택 DB 연결
+
+`DB_PRIMARY_URL`을 비우면 DB 없는 앱입니다. 현재 파일 SQLite만 지원하며 업무 schema는 아직 없습니다.
+로컬에서는 `mkdir -p data` 후 `.env`에 `DB_PRIMARY_URL=sqlite+aiosqlite:///./data/reservations.db`를 설정합니다.
+Compose에서는 저장소 루트에서 다음과 같이 실행합니다. `/app/data`는 UID 10001이 쓰는 named volume입니다.
+
+```sh
+DB_PRIMARY_URL=sqlite+aiosqlite:////app/data/reservations.db ./scripts/compose.sh fastapi --profile monitoring up --build --wait
+```
+
+pool 크기·overflow·획득 timeout·SQLite 잠금 timeout은 `.env.example`에서 구분합니다.
+시작 시 연결을 확인하고 실패하면 ready가 되지 않습니다. 시작 중 schema/migration은 수행하지 않습니다.
+DB 계측의 의미와 범위는 [구현 설계](../../design/implementations/fastapi.md#db-계측과-로컬-모니터링-계획)를 참조합니다.
+
+## 코드 배치
 
 [폴더 구조와 활용 기준](../../design/implementations/fastapi-structure.md)에서 실제 구조 Mermaid,
 파일별 역할, 스키마·업무 타입·ORM 모델의 구분, 소비 프로젝트에서 변경할 수 있는 부분을 확인합니다.

@@ -5,9 +5,11 @@ description = "FastAPI backend starting point"
 readme = "README.md"
 requires-python = ">=3.14.7,<3.15"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "fastapi>=0.141.1",
     "prometheus-client>=0.26.0",
     "pydantic-settings>=2.15.0",
+    "sqlalchemy[asyncio]>=2.0.52,<2.1",
     "uvicorn>=0.52.4",
 ]
 

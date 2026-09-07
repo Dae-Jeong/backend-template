@@ -2,12 +2,29 @@ from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from template_api.bootstrap.contracts import Lifespan, PrepareResources
+from template_api.core.database import create_primary_engine
+from template_api.core.settings import Settings
 
 
-async def prepare_resources(app: FastAPI, stack: AsyncExitStack) -> None:
-    """현재 외부 자원은 없습니다. 도입 시 획득 직후 stack에 정리를 등록합니다."""
+async def prepare_resources(
+    app: FastAPI, stack: AsyncExitStack, *, settings: Settings
+) -> None:
+    if not settings.db_primary_url:
+        return
+    engine = create_primary_engine(settings, app.state.database_metrics)
+    stack.push_async_callback(engine.dispose)
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
+    app.state.primary_engine = engine
+    app.state.primary_session_factory = async_sessionmaker(
+        engine, expire_on_commit=False
+    )
+    stack.callback(delattr, app.state, "primary_engine")
+    stack.callback(delattr, app.state, "primary_session_factory")
 
 
 def create_lifespan(prepare: PrepareResources) -> Lifespan:

@@ -19,6 +19,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     SERVER_HOST=0.0.0.0 \
     SERVER_PORT=8000
 COPY --from=build /app/.venv /app/.venv
+RUN mkdir /app/data && chown 10001:10001 /app/data
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
