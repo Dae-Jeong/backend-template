@@ -49,7 +49,50 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 - `/health/ready`: 준비 완료 200, 미완료 503
 
 인사 API의 입력 검증·clock DI·lifespan·health·HTTP metrics·구조화 로그를 구현했습니다.
-성공·오류 응답 계약도 적용했습니다. 컨테이너와 기존 전체 검증 명세는 아직 완료하지 않았습니다.
+성공·오류 응답 계약과 단일 API 컨테이너도 적용했습니다. 기존 전체 검증 명세의 완료를 뜻하지 않습니다.
+
+## 컨테이너 실행
+
+이 디렉터리에서 Docker Desktop 또는 Docker Engine·Compose가 실행 가능한 상태로 진행합니다.
+기존 uv 서버의 18080과 구분해 컨테이너는 **127.0.0.1:18081**로 게시합니다. 포트 점유를 먼저 확인합니다.
+
+```sh
+docker compose --env-file .env.example config --quiet
+docker compose --env-file .env.example build
+docker compose --env-file .env.example up --wait --wait-timeout 60
+docker compose --env-file .env.example ps
+curl -i 'http://127.0.0.1:18081/v1/greetings?name=Marin'
+docker compose --env-file .env.example logs -f api
+```
+
+[컨테이너 Swagger](http://127.0.0.1:18081/docs), [readiness](http://127.0.0.1:18081/health/ready),
+[metrics](http://127.0.0.1:18081/metrics)에서 확인합니다. 로그 조회만 종료하려면 Ctrl+C입니다.
+
+```sh
+docker compose --env-file .env.example stop api
+docker compose --env-file .env.example down
+```
+
+`stop`은 컨테이너를 남겨두고 종료하며 `down`은 이 Compose 앱의 컨테이너·네트워크를 제거합니다.
+DB·외부 수집기는 생성하지 않습니다. 이미지 레지스트리에 push하지 않습니다.
+
+개인 설정을 적용할 때는 위 명령의 `--env-file .env.example`을 `--env-file .env`로 바꿉니다.
+Compose는 APP_NAME·SERVICE_VERSION·APP_ENVIRONMENT·LOG_LEVEL만 명시적으로 컨테이너에 전달합니다.
+env 파일 자체를 이미지나 컨테이너에 복사하지 않습니다. 내부 SERVER_HOST/PORT는 0.0.0.0:8000으로 고정하며
+host 게시 포트와 종료 예산은 `compose.yaml`에서 함께 관리합니다. 앱 15초·Compose 20초입니다.
+
+```mermaid
+flowchart LR
+    INPUT["pyproject · uv.lock · src"] --> BUILD["builder · uv sync locked · 런타임 의존성"]
+    BUILD --> IMAGE["runtime · 설치된 패키지 · UID 10001"]
+    IMAGE --> RUN["Compose · 단일 API · readiness"]
+    RUN --> STOP["SIGTERM · lifespan 종료"]
+```
+
+Python·uv 이미지 digest를 고정했으며 갱신 시 버전·lock 호환성과 컨테이너를 재검증합니다.
+linux/arm64에서 빌드·healthy·API/오류/관측·비 root·dev 도구/env 제외·유휴 종료·재기동을 확인했습니다.
+CPU 0.5개·512MiB·로그 10MiB×3개 설정을 확인했습니다. 부하·실제 로그 회전·amd64는 미검증입니다.
+상세한 수명·제약은 [컨테이너 설계](../../design/implementations/fastapi.md#로컬-컨테이너-실행)가 소유합니다.
 
 ## 응답 포맷
 

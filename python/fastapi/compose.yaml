@@ -1,0 +1,25 @@
+name: backend-template-fastapi
+services:
+  api:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:18081:8000"
+    environment:
+      APP_NAME: "${APP_NAME:-Backend Template}"
+      SERVICE_VERSION: "${SERVICE_VERSION:-0.1.0}"
+      APP_ENVIRONMENT: "${APP_ENVIRONMENT:-local}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # 컨테이너 내부 주소·포트와 종료 예산은 함께 관리합니다.
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8000"
+      SHUTDOWN_TIMEOUT_SECONDS: "15"
+    init: true
+    cpus: 0.5
+    mem_limit: 512m
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -266,46 +266,37 @@ completion은 complete/cancelled/send_failed/disconnected/incomplete, execution�
 CancelledError를 삼키지 않고 cleanup 후 다시 전파합니다. 관측 실패가 원래 실패나 문맥 복원을 방해하지 않게 합니다.
 응답 시작 후 새 500 응답을 보내지 않습니다. 강제 종료에서는 로그·finally를 보장하지 않습니다.
 
-## 로컬 실행 후보
+## 로컬 컨테이너 실행
 
-단일 API 컨테이너만 사용하며 DB·프록시·모니터링 서버는 추가하지 않습니다.
-Dockerfile은 비 root 실행과 lock 기반 설치, `.env`·개발 캐시 제외를 포함할 예정입니다.
-아래는 아직 실행할 수 없는 manifest 설계 예시입니다.
+Status: 단일 API 이미지·Compose 구현 및 linux/arm64 검증 · 2026-09-07
 
-```yaml
-name: backend-template-fastapi
-services:
-  api:
-    build: .
-    command: ["python", "-m", "template_api.run"]
-    ports: ["127.0.0.1:${HTTP_PORT:-18080}:8000"]
-    environment:
-      APP_NAME: "${APP_NAME:-fastapi-template}"
-      APP_ENV: local
-      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
-      SERVICE_VERSION: "${SERVICE_VERSION:-dev}"
-    init: true
-    cpus: 0.5
-    mem_limit: 512m
-    stop_grace_period: 20s
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "3"}
-```
+실행 정의는 [Dockerfile](../../python/fastapi/Dockerfile)과 [compose.yaml](../../python/fastapi/compose.yaml),
+명령·접속 주소는 [사용 안내](../../python/fastapi/README.md#컨테이너-실행)가 소유합니다.
+`docker init`으로 생성한 Python 기본 파일을 기존 uv 프로젝트에 맞게 수정했습니다.
 
-실제 `.env`를 만들 때 아래 예시 값으로 시작할 예정입니다. 비밀값은 없습니다.
+Python 3.14.7·uv 0.12.10 공식 이미지를 버전·manifest digest로 고정합니다.
+builder에서 `uv sync --locked --no-dev --no-editable`로 설치하고 런타임에는 설치된 환경만 복사합니다.
+로컬 env·tests·cache·dist는 빌드 context 허용 목록에서 제외합니다. 최종 앱은 UID/GID 10001로 실행합니다.
 
-```dotenv
-HTTP_PORT=18080
-APP_NAME=fastapi-template
-LOG_LEVEL=INFO
-SERVICE_VERSION=dev
-```
+Compose는 단일 API만 실행하고 host 127.0.0.1:18081을 컨테이너 8000에 연결합니다.
+앱 서비스 이름·버전·환경·로그 수준은 명시적으로 환경변수에 전달합니다.
+내부 바인딩 0.0.0.0:8000과 앱 종료 대기 15초·Compose 종료 유예 20초는 Compose에서 함께 관리합니다.
+컨테이너의 0.0.0.0 바인딩이 host 전체 공개를 뜻하지 않습니다. host 게시 주소는 loopback입니다.
 
-Compose 변수 치환과 앱 환경 주입을 분리합니다. 실제 `.env`는 Git·이미지에 넣지 않고 example만 추적합니다.
-run은 컨테이너 내부 0.0.0.0:8000에서 단일 worker로 실행하고 접근 로그 원문 출력을 끕니다.
-readiness healthcheck, graceful shutdown timeout, 로그 보관·자원 상한은 구현 시 manifest와 검증을 함께 추가합니다.
-후보 수치는 처리 능력이나 종료 보장 수치가 아닙니다. 실제 기동 전에 포트 점유를 확인합니다.
+readiness를 Python 표준 HTTP client로 10초마다 확인하며 timeout 3초·시작 유예 5초·실패 3회 기준입니다.
+health 상태는 자동 재시작·LB drain을 구현하지 않습니다.
+CPU 0.5개·메모리 512MiB·json-file 로그 10MiB 단위 최대 3개는 초기 실행 예산이며 성능 보장 수치가 아닙니다.
+애플리케이션 cleanup 전체 timeout과 장기 수집·무손실 로그는 보장하지 않습니다.
+
+Docker Desktop에서 이미지 빌드·healthy·200/422 응답·Swagger·metrics·JSON 로그,
+실제 UID·Python 버전·dev 도구/env 제외·적용 자원/게시 포트를 확인했습니다.
+`docker compose stop` 후 application.stopped·server.stopped, OOM=false와 종료 코드 143(SIGTERM)을 확인했습니다.
+재기동 후 healthy를 확인했습니다. 요청 drain의 기존 격리 프로세스 시험과 별도로,
+이 컨테이너 smoke는 유휴 상태 종료이며 진행 중 요청의 컨테이너 drain·강제 종료·부하·amd64는 검증하지 않았습니다.
+로그 회전 옵션 적용을 확인했으며 대량 출력에 의한 실제 회전 실험은 하지 않았습니다.
+
+참고(2026-09-07): [uv Docker 통합](https://docs.astral.sh/uv/guides/integration/docker/),
+[Compose 서비스 설정](https://docs.docker.com/reference/compose-file/services/).
 
 ## 확인할 사항
 

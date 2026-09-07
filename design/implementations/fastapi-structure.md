@@ -118,7 +118,7 @@ metrics·로깅 기반은 `core/metrics.py`·`core/logging.py`입니다. HTTP �
 feature의 업무 이벤트·정책은 공통 로깅 기반을 사용하더라도 feature가 소유합니다.
 
 DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.
-Dockerfile·Compose는 필요 시 `python/fastapi/`에 두며 아직 미구현입니다.
+Dockerfile·Compose·빌드 context 허용 목록은 `python/fastapi/`에서 관리하며 단일 API 컨테이너를 구현했습니다.
 Java/Spring Boot·TypeScript/Nest에는 각 언어와 프레임워크에 맞는 별도 배치를 정합니다.
 
 ## 소비 프로젝트에서 바꿀 수 있는 부분

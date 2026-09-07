@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1·2·3 및 HTTP metrics·로그·응답 계약 완료 · 컨테이너 범위 논의 후속 · 2026-09-07
+Status: Task 1~4 로컬 구현 완료 · 다음 Task 5 예약 계약 합의 · 2026-09-07
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -25,7 +25,7 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 4 | HTTP metrics · 로컬 완료 | prometheus-client, 요청 수·지연·결과, 제한된 라벨, 앱별 registry, 관측 실패·동시 요청 격리 검증 | 4 |
 | 5 | 구조화 로그 · 로컬 완료 | 표준 logging, JSON·허용 필드, 요청 ID·ContextVar·실패 격리·실제 Uvicorn 오류 중복 방지 검증 | 4 |
 | 6 | 응답 계약 · 기반 완료 | 성공 data·Problem Details, 422/404/405/500·공개 코드·요청 ID·원문 제외·Swagger 일치 검증. 업무 오류는 기능 도입 시 추가 | 2·4 |
-| 7 | 컨테이너 실행 | 단일 API Dockerfile·Compose, lock 설치, 비 root, env 제외, 포트·자원·로그 보관 상한 | 4 |
+| 7 | 컨테이너 실행 · 로컬 완료 | 단일 API 빌드·healthy·응답/관측·UID 10001·env/dev 제외·자원/로그 상한 설정·유휴 종료·재기동 검증 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
 | 9 | DB 통합 | DB·driver·저장 도구 선택, 격리 DB 대상, migration, pool 예산·timeout·트랜잭션 소유권 | 6 |
 | 10 | 동시성 보호 | DB 제약·조건부 변경・잠금 중 필요한 방식, 독립 연결 경합에서 초과 예약 방지 | 7 |
@@ -56,7 +56,7 @@ flowchart TD
 flowchart TD
     T1["1 · uv와 Python 프로젝트"] --> T2["2 · 인사 API와 명시적 DI"]
     T2 --> T3["3 · 설정과 시작·종료"]
-    T3 --> T4["4 · 로그와 HTTP 계측"]
+    T3 --> T4["4 · 로그 · HTTP 계약 · 컨테이너"]
     T4 --> T5["5 · 예약 계약 합의"]
     T5 --> T6["6 · 단일 Primary 예약 저장"]
     T6 --> T7["7 · 서로 다른 요청의 경합"]
@@ -108,13 +108,13 @@ Settings와 실행 진입점, lifespan, 생존·준비 상태를 구현합니다
 - 불량 설정의 안전한 시작 실패, 앱 간 격리, 부분 초기화 실패 정리가 확인됩니다.
 - 정상 종료와 취소에서 소유 자원이 정리되며 외부 자원은 시험 대역만 사용합니다.
 
-## Task 4. 로그와 HTTP 계측
+## Task 4. 로그·HTTP 계약·컨테이너
 
 진행 순서: 사용자 결정으로 Metrics → Logging 순서입니다.
 Metrics 진행: `uv add prometheus-client`로 의존성을 추가하고 앱별 registry·순수 ASGI 관측·`/metrics`를 연결했습니다.
 정상·422·404·500·전송 실패·취소·background 오류·동시 요청·관측 실패 격리를 포함해 전체 33개 테스트가 통과했습니다.
 계측 실패는 업무 응답·원래 예외를 보존하고 `/metrics`의 503으로 드러냅니다.
-외부 수집 서버·CPU/RSS collector·다중 worker 집계·Compose는 미구현입니다.
+외부 수집 서버·CPU/RSS collector·다중 worker 집계는 미구현입니다.
 Metrics 보완: enum 상태·불변 결과 계약·숫자 status와 지표 기록 경계를 분리했습니다.
 문서 조회 제외·동적 route template·405 집계 회귀 검증을 포함해 전체 34개 테스트가 통과했습니다.
 로컬 `/metrics` 선택이 전체 언어·환경의 전달 방식을 고정하지 않습니다.
@@ -124,7 +124,11 @@ INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_EN
 실제 격리 서버에서 설정 두 번·500 오류 상세 1회·요약 연결·SIGTERM drain을 확인했습니다.
 응답 계약 진행: 성공 data·Problem Details를 합의하고 내부 업무 타입과 외부 스키마를 분리했습니다.
 전체 53개 테스트·lint·타입 검사로 기본 오류·요청 ID·Swagger·헤더 보존·stream 오류 회귀를 확인했습니다.
-다음은 컨테이너 실행 범위 논의입니다. 실제 업무 충돌 코드·파일 rotation·queue·외부 수집은 후속입니다.
+컨테이너 진행: docker init 생성 후 uv lock·멀티 스테이지·비 root·readiness·loopback 게시를 적용했습니다.
+linux/arm64 실제 빌드·healthy·200/422·Swagger/metrics/JSON 로그·UID/dev/env 제외와 자원/로그 보관 설정을 확인했습니다.
+SIGTERM 종료 로그·OOM=false·exit 143과 재기동 healthy를 확인했습니다. 컨테이너 내 진행 요청 drain·부하·amd64·실제 로그 회전은 미검증입니다.
+Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 검증 명세의 모든 항목 완료를 뜻하지 않습니다.
+다음은 Task 5 예약 계약 합의입니다. 실제 업무 충돌 코드·queue·외부 수집은 후속입니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.
