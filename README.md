@@ -19,6 +19,8 @@ flowchart TB
 | 문서 | 역할 |
 | --- | --- |
 | [설계 안내](design/README.md) | 상태·읽는 순서·문서 소유권입니다. |
+| [개발 원칙](design/engineering.md) | 업무·DB·외부 연계·타입·검증의 기준입니다. |
+| [Runtime Review](design/runtime-review.md) | 성능·런타임·용량·비용 판단 기준입니다. |
 | [Backend 공통 설계](design/backend.md) | 책임 경계·설정·초기화·종료·검증 계약입니다. |
 | [로깅과 관측](design/observability.md) | 공통 필드·수집 경계·기능별 확장·설계 선택입니다. |
 | [FastAPI 구현 설계](design/implementations/fastapi.md) | Python 구성·수명주기·DI·ASGI 처리·Compose 후보입니다. |
@@ -27,6 +29,8 @@ flowchart TB
 ## 제공 범위
 
 첫 구현은 FastAPI 예제 API, 환경 설정, DI, health, JSON 로깅, 기본 metrics, 테스트, Docker Compose를 대상으로 합니다. DB·인증·채팅·외부 API·모니터링 서버는 기본으로 포함하지 않습니다.
+
+`design/`는 설계 정본입니다. 다른 저장소의 아이디어를 추가로 찾아야 이해할 수 있는 구조로 만들지 않습니다.
 
 Java·Rust는 후속 후보입니다. 해당 구현을 시작할 때 프레임워크와 구체적인 구조를 결정합니다.
 

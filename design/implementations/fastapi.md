@@ -30,6 +30,19 @@ uv lockfile과 pytest·httpx·Ruff를 사용해 설치·테스트·lint를 재�
 
 ## 초기화와 DI
 
+### Python 개발 규칙
+
+업무 함수·변수는 snake_case, 입력·반환 타입은 명시적으로 작성합니다. 내부용이라는 이유만으로
+`_`·`__` 접두사를 추가하지 않습니다. `__init__` 등 언어·라이브러리 프로토콜 요구는 예외입니다.
+`T | None`, 혼동하기 쉬운 인자의 keyword-only, 패키지 기준 절대 import를 기본으로 사용합니다.
+Any·타입 예외는 외부 경계 등 필요한 곳에 이유를 남깁니다. 이유·예외 조건은 한국어 docstring으로 설명합니다.
+업무 결과가 구조화되어야 하면 불변 dataclass를 우선하고, 단순 값을 불필요하게 감싸지 않습니다.
+문자열 상태는 StrEnum을 기본 후보로 두며 멤버는 UPPER_SNAKE_CASE, 값은 lower_snake_case로 표현합니다.
+외부 표준의 코드 형식은 유지합니다. 순수 변환은 I/O를 하지 않으며 업무 함수가 ORM session을 직접 조회하지 않습니다.
+단일 행위 교체는 typed callable, 응집된 여러 행위는 필요한 Protocol로 표현합니다. 주입 인자가 과도하면 책임부터 검토합니다.
+
+### 자원 수명
+
 ```mermaid
 flowchart TD
     ENTRY["run · Settings 검증"] --> LOG["프로세스 logging 1회 설정"]
@@ -152,6 +165,17 @@ readiness healthcheck, graceful shutdown timeout, 로그 보관·자원 상한�
 후보 수치는 처리 능력이나 종료 보장 수치가 아닙니다. 실제 기동 전에 포트 점유를 확인합니다.
 
 ## 확인할 사항
+
+후속 `postgres-integration`은 foundation 위에 pool/session·트랜잭션·migration·실제 격리 DB 시험을 추가하는
+선택 기능입니다. DB 없는 앱과 DB 필수 앱을 명확히 구분하고 DB 장애를 인메모리 성공으로 숨기지 않습니다.
+수명주기 자원은 factory 입력으로 교체하고, 요청의 Depends override와 별도로 검증합니다.
+한 세션은 동시 task에 공유하지 않습니다. WS/stream 전체에 DB transaction을 유지하지 않습니다.
+선택 DB의 rollback·취소·경합 시험은 실제 DB에서 하며 대역 시험으로 대신 통과시키지 않습니다.
+
+`template-distribution`은 복사형 시작점입니다. 원본 커밋/릴리스·복사 후 변경 지점·검증 명령을 기록하고
+서비스 소유 코드에 원본 업데이트를 자동 덮어쓰지 않습니다. generator는 치환 반복이 생기면,
+runtime package는 실제 공통 동작과 호환성 유지 수요가 생기면 별도로 검토합니다.
+라이선스와 외부 코드 재사용 권한은 코드 도입 전에 확인합니다.
 
 정확한 의존성 버전·이미지·예외 처리 배치·ASGI wrapper·logging entrypoint의 호환성을 구현 전에 고정합니다.
 실행 명령은 파일을 만든 뒤 검증하여 README에 제공합니다. [검증 케이스](fastapi-verification.md)는 아직 모두 미실행입니다.
