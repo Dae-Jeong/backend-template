@@ -392,6 +392,50 @@ p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저�
 [Grafana Docker](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/),
 [Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/).
 
+## DB 연결 기반 계획
+
+Status: SQLite 첫 실험의 Engine·Session 구성 제안 · 미구현 · 2026-09-07
+
+SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용하도록 제안합니다.
+aiosqlite는 연결별 백그라운드 스레드로 SQLite 작업을 처리하며 SQLite의 단일 writer 제약을 없애지는 않습니다.
+패키지는 `uv add`로 추가하고 lock·현재 Python 호환성을 확인합니다. ORM 모델·migration은 다음 세부 task입니다.
+
+| 순서 | 변경 위치 | 책임·확인 기준 |
+| --- | --- | --- |
+| 6-1 Engine·수명 | `core/database.py`, `core/settings.py`, `bootstrap/lifespan.py` | 앱 수명마다 Engine·Session factory 생성, 연결 확인, 시작 실패 정리, 종료 시 `await engine.dispose()` |
+| 6-2 Session·DI | `dependencies/database.py` | 요청마다 새 AsyncSession 생성·종료, 서비스에 일반 인자로 전달, 동시 task 간 Session 공유 금지 |
+| 6-3 schema·migration | 도구 초기화로 경로 확정 | 예약 모델·고유/수량 제약, Alembic 공식 초기화·revision·upgrade, 앱 시작 중 자동 migration 금지 |
+| 6-4 순차 예약 | `services/`, `repositories/` 등 | 업무가 트랜잭션 범위를 소유하고 repository가 SQL을 수행, 차감·예약 저장의 commit/rollback 검증 |
+
+```mermaid
+flowchart LR
+    SETTINGS["Settings · DB URL과 대기/풀 예산"] --> LIFE["lifespan · Engine 생성과 연결 확인"]
+    LIFE --> FACTORY["앱별 async_sessionmaker"]
+    FACTORY --> DEP["Depends · 요청별 AsyncSession"]
+    DEP --> SERVICE["service · 명시적 트랜잭션"]
+    SERVICE --> REPO["repository · 같은 Session으로 SQL"]
+    LIFE -->|"시작 실패 / 종료"| DISPOSE["engine.dispose"]
+```
+
+Engine은 실제 단일 연결이 아니라 연결·pool의 관리 객체입니다. import 시 전역 Engine/Session을 생성하지 않습니다.
+Session은 요청마다 만들되 DB 연결은 필요할 때 pool에서 획득합니다. 요청 종료 dependency에 자동 commit을 숨기지 않습니다.
+서비스의 명시적인 트랜잭션 구간에서 성공 시 commit, 실패 시 rollback하고 응답 직렬화 전에 완료합니다.
+초기 URL 예시는 `sqlite+aiosqlite:///./data/reservations.db`이며 실제 파일은 Git에서 제외합니다.
+컨테이너 경로·volume·비 root 쓰기 권한은 연결을 추가하는 단계에서 함께 설정합니다.
+URL 미설정 상태의 DB 없는 기본 앱을 유지하고, DB를 설정한 앱은 시작 연결 확인 실패 시 ready가 되지 않습니다.
+이는 실행 중 DB 건강을 계속 확인한다는 의미가 아닙니다.
+
+설정은 `.env.example`에 DB URL·pool 크기·pool 획득 timeout·SQLite 잠금 대기 timeout을 구분해 추가합니다.
+초기 검토값은 pool 4개·추가 연결 0개이며 worker/인스턴스 수를 곱한 전체 예산으로 봅니다.
+여러 연결은 경합을 관찰하기 위한 것이며 동시에 여러 쓰기를 수행한다는 뜻이 아닙니다.
+SQLite driver의 transaction control과 연결별 foreign key 활성화를 명시적으로 설정·검증합니다.
+WAL·BEGIN IMMEDIATE 등 잠금 전략은 후속 경합 시험에서 필요성과 효과를 확인하며 설정만으로 정합성을 주장하지 않습니다.
+
+6-1/6-2 통과 조건: 설정 검증·실제 파일 DB 연결·앱/요청 간 격리·commit/rollback·pool timeout·
+시작 실패/종료 자원 정리입니다. 순차 예약 → 서로 다른 키 경합 → 같은 키 재전송/응답 유실 순서는 기존 task를 따릅니다.
+참고: [SQLAlchemy asyncio](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html),
+[SQLite aiosqlite dialect](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html#aiosqlite).
+
 ## 확인할 사항
 
 후속 `postgres-integration`은 foundation 위에 pool/session·트랜잭션·migration·실제 격리 DB 시험을 추가하는

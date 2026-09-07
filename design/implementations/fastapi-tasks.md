@@ -189,8 +189,9 @@ flowchart LR
 ## Task 6. 단일 Primary 예약 저장
 
 첫 구현 대상: 서버형 DB 대신 로컬 파일 SQLite입니다. DB 서버·공유 Postgres 변경은 하지 않습니다.
-기본 후보는 Python 표준 `sqlite3`이며 파일 기반 임시 DB와 요청별 독립 연결로 검증합니다.
-동기 DB 접근은 이벤트 루프 밖에서 실행하고, 연결 생성·사용·종료를 같은 작업 스레드 안에서 수행합니다.
+연결 관리안은 표준 `sqlite3` 직접 사용 후보에서 SQLAlchemy AsyncEngine·aiosqlite 후보로 구체화했습니다.
+Engine·Session·트랜잭션 소유권과 첫 세부 task는 [DB 연결 기반 계획](fastapi.md#db-연결-기반-계획)이 소유합니다.
+실제 파일 기반 임시 DB와 독립 Session/연결로 검증합니다. 아직 DB 의존성·코드는 추가하지 않았습니다.
 SQLite는 단일 writer이므로 쓰기 경합이 직렬화됩니다. WAL도 여러 writer를 동시에 실행하게 만들지는 않습니다.
 이 실험으로 PostgreSQL의 행 잠금·다중 writer 처리량까지 검증했다고 설명하지 않습니다.
 schema 생성 방식·DB 파일 위치·잠금 대기 제한·HTTP 매핑은 구현 착수 시 구체화합니다.
