@@ -1,13 +1,19 @@
+import json
+import selectors
 import sqlite3
+import subprocess
+import sys
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from pathlib import Path
 from threading import Barrier
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
 from sqlalchemy.engine import make_url
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
@@ -223,3 +229,175 @@ def test_idempotency_header_validation(client: TestClient, database_url: str) ->
         client.post("/v1/reservations", json={"product_id": "demo"}).status_code == 422
     )
     assert database_state(database_url) == (1, 0, 0)
+
+
+def test_same_key_concurrent_replay(client: TestClient, database_url: str) -> None:
+    barrier = Barrier(12)
+    with (
+        TestClient(create_app(Settings(db_primary_url=database_url))) as other,
+        ThreadPoolExecutor(max_workers=12) as executor,
+    ):
+
+        def call(index):
+            barrier.wait(timeout=5)
+            return (client if index % 2 else other).post(
+                "/v1/reservations",
+                json={"product_id": "demo"},
+                headers={"Idempotency-Key": "shared"},
+            )
+
+        responses = list(executor.map(call, range(12)))
+    assert all(r.status_code == 201 for r in responses)
+    assert len({r.content for r in responses}) == 1
+    assert [r.headers["Idempotency-Replayed"] for r in responses].count("false") == 1
+    assert database_state(database_url) == (0, 1, 1)
+
+
+def test_same_key_different_input_race(client: TestClient, database_url: str) -> None:
+    barrier = Barrier(2)
+
+    def call(product):
+        barrier.wait(timeout=5)
+        return client.post(
+            "/v1/reservations",
+            json={"product_id": product},
+            headers={"Idempotency-Key": "shared"},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(call, ["demo", "other"]))
+    assert sorted(r.status_code for r in responses) == [201, 409]
+    assert (
+        next(r for r in responses if r.status_code == 409).json()["code"]
+        == "IDEMPOTENCY_CONFLICT"
+    )
+    with closing(sqlite3.connect(str(make_url(database_url).database))) as connection:
+        assert (
+            connection.execute("SELECT sum(available) FROM products").fetchone()[0] == 1
+        )
+    assert database_state(database_url)[1:] == (1, 1)
+
+
+class DropSuccessResponse:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.body = b""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        successful = False
+
+        async def drop(message: Message) -> None:
+            nonlocal successful
+            if message["type"] == "http.response.start":
+                successful = message["status"] == 201
+            if successful and message["type"] == "http.response.body":
+                self.body = message["body"]
+                raise ConnectionResetError("test response loss after commit")
+            await send(message)
+
+        await self.app(scope, receive, drop)
+
+
+def test_response_loss_then_restart_replays(
+    client: TestClient, database_url: str
+) -> None:
+    broken = DropSuccessResponse(create_app(Settings(db_primary_url=database_url)))
+    with TestClient(broken) as failing:
+        with pytest.raises(ConnectionResetError):
+            failing.post(
+                "/v1/reservations",
+                json={"product_id": "demo"},
+                headers={"Idempotency-Key": "lost"},
+            )
+    assert database_state(database_url) == (0, 1, 1)
+    with TestClient(create_app(Settings(db_primary_url=database_url))) as restarted:
+        replay = restarted.post(
+            "/v1/reservations",
+            json={"product_id": "demo"},
+            headers={"Idempotency-Key": "lost"},
+        )
+        assert replay.status_code == 201
+        assert replay.content == broken.body
+        assert replay.headers["Idempotency-Replayed"] == "true"
+    assert database_state(database_url) == (0, 1, 1)
+
+
+@pytest.mark.parametrize("mode", ["before_commit", "after_commit"])
+def test_process_crash_and_retry(
+    client: TestClient, database_url: str, mode: str
+) -> None:
+    worker = Path(__file__).with_name("process_worker.py")
+    process = subprocess.run(
+        [sys.executable, str(worker), database_url, "crash", mode],
+        input="go\n",
+        text=True,
+        capture_output=True,
+        timeout=15,
+    )
+    assert process.returncode == (23 if mode == "before_commit" else 24), process.stderr
+    assert database_state(database_url) == (
+        (1, 0, 0) if mode == "before_commit" else (0, 1, 1)
+    )
+    response = client.post(
+        "/v1/reservations",
+        json={"product_id": "demo"},
+        headers={"Idempotency-Key": "crash"},
+    )
+    assert response.status_code == 201
+    assert response.headers["Idempotency-Replayed"] == (
+        "false" if mode == "before_commit" else "true"
+    )
+    assert database_state(database_url) == (0, 1, 1)
+
+
+@pytest.mark.parametrize("same_key", [False, True])
+def test_independent_processes(
+    client: TestClient, database_url: str, same_key: bool
+) -> None:
+    worker = Path(__file__).with_name("process_worker.py")
+    processes = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(worker),
+                database_url,
+                "shared" if same_key else f"key-{i}",
+                "normal",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for i in range(2)
+    ]
+    try:
+        with selectors.DefaultSelector() as selector:
+            for process in processes:
+                assert process.stdout is not None
+                selector.register(process.stdout, selectors.EVENT_READ, process.stdout)
+            while selector.get_map():
+                ready = selector.select(timeout=10)
+                assert ready, "workers did not become ready"
+                for stream, _ in ready:
+                    assert stream.data.readline().strip() == "ready"
+                    selector.unregister(stream.fileobj)
+        for process in processes:
+            assert process.stdin is not None
+            process.stdin.write("go\n")
+            process.stdin.flush()
+        results = []
+        for process in processes:
+            stdout, stderr = process.communicate(timeout=15)
+            assert process.returncode == 0, stderr
+            results.append(json.loads(stdout.splitlines()[-1]))
+        assert sum(r["status"] == "ok" for r in results) == (2 if same_key else 1)
+        if same_key:
+            assert results[0]["reservation"] == results[1]["reservation"]
+            assert sorted(r["replayed"] for r in results) == [False, True]
+        assert database_state(database_url) == (0, 1, 1)
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            process.communicate()
