@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from template_api.exceptions.application import ApplicationError
 from template_api.schemas.responses import (
     ErrorCode,
     FieldError,
@@ -59,6 +60,21 @@ def problem_response(
             "X-Request-ID": request_id,
         },
     )
+
+
+async def application_error(
+    request: Request,
+    exc: Exception,
+    *,
+    status: HTTPStatus,
+    code: ErrorCode,
+) -> JSONResponse:
+    """구체 업무 예외에 partial로 연결합니다. 예외 원문은 공개하지 않습니다."""
+    if not isinstance(exc, ApplicationError):
+        raise exc
+    if not 400 <= status < 500 or code is ErrorCode.INTERNAL_ERROR:
+        raise ValueError("Invalid application error response mapping")
+    return problem_response(request, status=status, code=code)
 
 
 async def validation_error(request: Request, exc: Exception) -> JSONResponse:

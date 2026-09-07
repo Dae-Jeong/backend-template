@@ -136,6 +136,9 @@ Python 빌드 버전은 `.python-version`에서 읽어 전달하며 Dockerfile�
 소스 배치 보완: 사용자 합의로 역할별 `routers/`·`services/`·`schemas/`·`contracts/`·`dependencies/`를 기본으로 적용했습니다.
 각 역할 안에서 `greetings.py`처럼 기능을 구분하며, `bootstrap/`·`core/`·HTTP 오류/관측 기반은 각각 책임을 유지합니다.
 DB 없는 현재 단계에서는 `repositories/`를 생성하지 않습니다.
+업무 예외 보완: `ApplicationError`와 공통 HTTP handler를 구현하고 FastAPI 명시적 등록 패턴을 검증했습니다.
+테스트 대역으로 매핑·500 fallback·원인 보존·앱별 격리·민감정보 비노출을 확인하며 실제 예약 예외는 Task 5 이후 추가합니다.
+업무 예외 보완 후 전체 테스트 59개·lint·포맷·타입 검사·패키지 빌드가 통과했습니다.
 이동 후 기존 53개 테스트·lint·포맷·타입 검사·wheel 빌드와 정적 import 순환 검사를 통과했습니다.
 재빌드한 컨테이너에서 readiness·성공/422·OpenAPI·metrics·Prometheus 수집을 확인했습니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.

@@ -114,6 +114,10 @@ curl -i http://127.0.0.1:18080/v1/greetings
 [공통 응답 계약과 Mermaid](../../design/backend.md#http-응답-계약),
 [FastAPI 오류 처리](../../design/implementations/fastapi.md#http-응답-포맷)에서 정확한 필드와 범위를 확인합니다.
 
+업무 예외는 `exceptions/application.py`의 `ApplicationError`를 상속하고 HTTP handler를 명시적으로 등록합니다.
+등록 예제와 미등록 오류의 500 정책은 [업무 예외 처리](../../design/implementations/fastapi.md#업무-예외-처리)에 있습니다.
+현재 실제 업무 예외를 발생시키는 endpoint는 없으며 테스트 대역으로 처리 경로를 검증합니다.
+
 ## Metrics 확인
 
 라이브러리 설치에 더해 요청 계측과 `GET /metrics`를 연결했습니다.
@@ -235,7 +239,7 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM·metrics·logging·응답 계약 시험을 포함한 현재 전체 테스트는 53개가 통과했습니다.
+lifespan·health·SIGTERM·metrics·logging·응답 계약·업무 예외 시험을 포함한 현재 전체 테스트는 59개가 통과했습니다.
 로그는 요청별 ID·서비스 문맥 분리, 취소·전송 오류·원래 예외 보존, 민감정보 제외,
 크기 상한·JSON 형식·출력 실패와 실제 Uvicorn 오류 중복 방지를 검증합니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.

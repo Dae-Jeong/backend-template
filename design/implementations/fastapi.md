@@ -150,21 +150,21 @@ health·metrics 자체 응답과 204·stream 등은 envelope로 감싸지 않습
 Swagger media type과 모델 참조·405 Allow·429 Retry-After·204·stream 재응답 금지와 로그·metrics 회귀를 검증했습니다.
 참고: [FastAPI 오류 handler](https://fastapi.tiangolo.com/tutorial/handling-errors/).
 
-## 업무 예외 구조 제안
+## 업무 예외 처리
 
-Status: 제안 · 미구현 · 2026-09-07
+Status: 공통 예외·HTTP handler 구현 및 테스트 대역 검증 · 2026-09-07
 
 역할별 구조에 `exceptions/`를 추가하고, 공통 업무 실패와 기능별 실패를 구분합니다.
 아래 예약 예외·409는 설명을 위한 후보이며 예약 정책은 Task 5에서 확정합니다.
 
 | 위치 | 책임 |
 | --- | --- |
-| `exceptions/application.py` · 추가 후보 | `ApplicationError(Exception)`로 예상 가능한 업무 실패를 식별합니다. HTTP·로깅에 의존하지 않습니다. |
+| `exceptions/application.py` · 구현 | `ApplicationError(Exception)`로 예상 가능한 업무 실패를 식별합니다. HTTP·로깅에 의존하지 않습니다. |
 | `exceptions/reservations.py` · 기능 도입 시 | `InsufficientStockError` 등 구체 예외와 필요한 최소 업무 정보입니다. 불필요한 중간 상속 단계는 두지 않습니다. |
 | `services/reservations.py` · 기능 도입 시 | 업무 조건을 판단해 구체 예외를 발생시킵니다. HTTPException·응답 schema를 사용하지 않습니다. |
-| `http/errors.py` · 기존 확장 | 명시적으로 지원한 예외만 HTTP 상태·공개 코드로 변환하고 기존 `problem_response`를 사용합니다. |
-| `schemas/responses.py` · 기존 확장 | 공개 ErrorCode와 Problem 계약을 소유합니다. 업무 예외가 이 모듈을 역으로 import하지 않습니다. |
-| `bootstrap/app.py` · 기존 확장 | FastAPI exception handler를 앱에 등록합니다. |
+| `http/errors.py` · 구현 | `application_error`에 상태·공개 코드를 고정해 구체 예외의 handler로 사용하며 기존 `problem_response`를 재사용합니다. |
+| `schemas/responses.py` · 기존 유지 | 공개 ErrorCode와 Problem 계약입니다. 새 업무 코드는 기능 도입 시 추가하며 업무 예외가 이 모듈을 역으로 import하지 않습니다. |
+| `bootstrap/app.py` · 등록 위치 | 실제 업무 예외를 도입할 때 앱 생성 중 명시적으로 handler를 등록합니다. 현재 운영 router에는 업무 예외가 없어 추가 등록하지 않습니다. |
 
 ```mermaid
 flowchart LR
@@ -174,13 +174,30 @@ flowchart LR
     UNKNOWN["미등록 예외 · 예상 밖 장애"] --> INTERNAL["기존 500 · 관측 경계의 오류 로그"]
 ```
 
+구체 예외를 등록하는 패턴은 FastAPI의 `add_exception_handler`와 표준 `functools.partial`입니다.
+다음은 테스트 대역인 `MissingResourceError`에 적용한 예시입니다. 실제 리소스 조회 기능을 추가한 것은 아닙니다.
+
+```python
+app.add_exception_handler(
+    MissingResourceError,
+    partial(application_error, status=HTTPStatus.NOT_FOUND, code=ErrorCode.NOT_FOUND),
+)
+```
+
+등록은 첫 요청 전에 앱 조립 시 수행합니다. 업무 예외 전체를 4xx로 처리하는 부모 handler는 등록하지 않습니다.
+FastAPI는 등록한 타입의 하위 예외도 처리하므로 정책을 공유하는 구체 타입에만 등록합니다.
+라우터의 `responses`에도 해당 HTTP 상태와 `Problem`을 명시합니다. handler 등록만으로 OpenAPI가 추가되지는 않습니다.
+
 예외 정의는 가벼운 타입 중심으로 시작합니다. HTTP status·공개 메시지·응답 직렬화·로그 출력을 예외 클래스에 넣지 않습니다.
 타입마다 필요한 정보가 생길 때만 속성을 추가하며 `str(exc)`나 임의 payload를 응답으로 그대로 내보내지 않습니다.
 매핑되지 않은 ApplicationError 하위 타입도 자동으로 4xx가 되지 않습니다. 기존 500·오류 기록 경로를 유지합니다.
 예상된 업무 거절은 요청 요약과 HTTP 상태로 관측하고, handler가 ERROR traceback을 중복 기록하지 않습니다.
 DB 오류는 확인된 제약·업무 조건만 의미 있는 예외로 변환하며 모든 DB 장애를 업무 거절로 축약하지 않습니다.
 
-첫 검증은 구체 예외의 매핑·미등록 예외의 500/로그·민감한 예외 정보 비노출·요청 ID·OpenAPI 일치입니다.
+`tests/test_application_errors.py`에서 테스트 대역의 404 매핑·미등록 예외의 500/오류 기록·원래 예외 보존·
+앱별 등록 격리·형제 예외 비매핑·응답/JSON 로그 원문 비노출·요청 ID·OpenAPI를 검증합니다.
+4xx 외 상태나 INTERNAL_ERROR 코드로 잘못 매핑하면 500으로 드러냅니다.
+현재 실제 예약·DB 오류 변환은 구현하지 않았습니다.
 범용 예외 registry·자동 탐색·예외별 Builder는 추가하지 않습니다.
 
 ## 로깅과 metrics 매핑

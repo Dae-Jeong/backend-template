@@ -32,6 +32,7 @@ flowchart TD
     SRC --> SERVICES["services/ · greetings.py"]
     SRC --> SCHEMAS["schemas/ · greetings.py · responses.py"]
     SRC --> CONTRACTS["contracts/ · greetings.py"]
+    SRC --> EXCEPTIONS["exceptions/ · application.py"]
     SRC --> DEP["dependencies/ · clock.py"]
     SRC --> HTTP["http/ · errors.py · observation.py"]
     SRC --> CORE["core/ · settings.py · clock.py · contracts.py · logging.py · metrics.py"]
@@ -48,6 +49,7 @@ flowchart TD
 | `schemas/greetings.py` | 외부 응답 `GreetingData`를 소유합니다. |
 | `schemas/responses.py` | 공통 성공 envelope·Problem Details·공개 오류 코드입니다. |
 | `contracts/greetings.py` | 내부 업무 결과 `Greeting`을 소유합니다. HTTP 스키마·ORM과 구분합니다. |
+| `exceptions/application.py` | 예상 가능한 업무 실패의 공통 타입입니다. 기능별 예외는 해당 기능 도입 시 이 폴더에 추가합니다. |
 | `dependencies/clock.py` | FastAPI Depends와 앱 상태 접근을 연결하는 HTTP provider입니다. |
 | `http/errors.py` | 예외의 공개 응답 매핑·안전한 검증 오류·OpenAPI 오류 명세입니다. |
 | `http/observation.py` | ASGI 전송·실행 결과를 관측합니다. router와 별도로 HTTP 전체를 감싸는 경계입니다. |
@@ -81,6 +83,7 @@ DB를 도입하면 `repositories/reservations.py`처럼 저장 역할을 추가�
 ORM 모델은 저장 역할에, 외부 요청·응답 모델은 `schemas/`, 내부 업무 타입은 `contracts/`에 둡니다.
 같은 필드를 가진다는 이유만으로 모든 타입과 변환 함수를 미리 만들지는 않습니다.
 설정·의존성·자원 수명은 기존 명시적 DI 계약을 유지합니다.
+업무 예외의 정의·등록·응답 매핑은 [업무 예외 처리](fastapi.md#업무-예외-처리)가 소유합니다.
 
 ## 여러 서비스를 조합할 때
 
