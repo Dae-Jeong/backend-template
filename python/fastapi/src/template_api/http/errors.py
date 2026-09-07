@@ -23,7 +23,11 @@ FIELD_CODES = {
 }
 
 # 현재 공개 입력 계약입니다. 새 입력 추가 시 승인한 필드 경로만 확장합니다.
-PUBLIC_LOCATIONS = {("query", "name")}
+PUBLIC_LOCATIONS = {
+    ("query", "name"),
+    ("body", "product_id"),
+    ("header", "Idempotency-Key"),
+}
 
 
 def problem_response(

@@ -1,4 +1,5 @@
 from functools import partial
+from http import HTTPStatus
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -14,7 +15,15 @@ from template_api.core.contracts import Clock, LogContext
 from template_api.core.database_metrics import create_database_metrics
 from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
+from template_api.exceptions.database import DatabaseBusy, DatabasePoolTimeout
+from template_api.exceptions.reservations import (
+    IdempotencyConflict,
+    ProductNotFound,
+    SoldOut,
+)
+from template_api.http.database import database_unavailable
 from template_api.http.errors import (
+    application_error,
     http_error,
     internal_error,
     problem_openapi,
@@ -24,6 +33,8 @@ from template_api.routers.greetings import router as greetings_router
 from template_api.routers.health import router as health_router
 from template_api.routers.index import router as index_router
 from template_api.routers.metrics import router as metrics_router
+from template_api.routers.reservations import router as reservations_router
+from template_api.schemas.responses import ErrorCode
 
 
 def create_app(
@@ -58,6 +69,18 @@ def create_app(
     app.include_router(greetings_router)
     app.include_router(health_router)
     app.include_router(metrics_router)
+    if settings.db_primary_url:
+        app.include_router(reservations_router)
+        for error, status, code in (
+            (ProductNotFound, HTTPStatus.NOT_FOUND, ErrorCode.PRODUCT_NOT_FOUND),
+            (SoldOut, HTTPStatus.CONFLICT, ErrorCode.SOLD_OUT),
+            (IdempotencyConflict, HTTPStatus.CONFLICT, ErrorCode.IDEMPOTENCY_CONFLICT),
+        ):
+            app.add_exception_handler(
+                error, partial(application_error, status=status, code=code)
+            )
+        app.add_exception_handler(DatabaseBusy, database_unavailable)
+        app.add_exception_handler(DatabasePoolTimeout, database_unavailable)
     # FastAPI가 지원하는 인스턴스별 OpenAPI 함수 교체입니다. self는 partial로 고정합니다.
     app.openapi = partial(problem_openapi, app, app.openapi)  # ty: ignore[invalid-assignment]
     return app

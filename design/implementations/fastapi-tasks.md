@@ -242,11 +242,15 @@ flowchart LR
     RECOVERY --> PG["9 · PostgreSQL 전환/재검증"]
 ```
 
-### Task 6-1. Engine과 pool 계측
-
 6-3 실행 결과(2026-09-08): Alembic 1.19.2의 async template·revision을 공식 CLI로 생성하고
 상품·예약·멱등 키 테이블을 추가했습니다. 새 파일 DB upgrade·반복 upgrade·`alembic check`와
 수량/외래 키/고유 키 제약 시험을 포함해 76개 테스트·Ruff·ty가 통과했습니다.
+
+6-4 실행 결과(2026-09-08): `POST /v1/reservations`와 역할별 service/repository/schema/contract를
+연결했습니다. 순차 성공·품절·없는 상품·입력 거절·저장 후 강제 실패의 전체 rollback과 Problem 응답,
+OpenAPI를 확인했습니다. 이 단계의 API는 멱등성 연결 전이며 8-1에서 키 입력을 필수화합니다.
+
+### Task 6-1. Engine과 pool 계측
 
 Status: 완료 · 2026-09-08. SQLAlchemy 2.0.52·aiosqlite 0.22.1을 `uv add`로 추가했습니다.
 기존 포함 63개 테스트와 Ruff·ty 통과. 파일 DB rollback·pool 고갈/무효화/회복·앱 재시작/격리·
