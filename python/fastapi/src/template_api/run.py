@@ -26,6 +26,7 @@ def main() -> None:
         log_level=settings.log_level,
         access_log=False,
         workers=1,
+        timeout_graceful_shutdown=settings.shutdown_timeout_seconds,
     )
 
 

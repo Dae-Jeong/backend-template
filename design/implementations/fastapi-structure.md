@@ -46,9 +46,12 @@ flowchart TD
 | `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
 | `src/template_api/core/clock.py` | 시간 공급 타입과 UTC 구현을 제공합니다. |
+| `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
+| `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
 | `src/template_api/greetings/api.py` | 이름 입력 검증·라우팅·HTTP 응답 직렬화를 연결합니다. |
 | `src/template_api/greetings/usecase.py` | 일반 업무 함수와 불변 `Greeting` 결과를 소유합니다. |
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
+| `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
 | `tests/core/`, `tests/greetings/` | 책임별 검증을 묶습니다. 소스의 모든 파일·폴더와 일대일 대응을 강제하지 않습니다. |
 | `pyproject.toml`, `uv.lock`, `.python-version` | 패키지·개발 검사 기준·의존성 해석 결과·실행 Python 버전을 관리합니다. |
 | `.env.example` | 사용자가 복사할 환경 설정 예시입니다. 실제 `.env`는 Git에서 제외합니다. |

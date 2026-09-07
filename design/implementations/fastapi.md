@@ -25,7 +25,7 @@ uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검�
 ## 초기화와 DI
 
 [DI 두 가지 선택안](fastapi-di-options.md)에서 외부 라이브러리 방식과 dependencies/Depends 방식을 비교합니다.
-B안을 선택하여 dependencies 모듈·Depends·clock 주입을 구현했습니다. 자원 수명 관련 후속 항목은 아직 미완료입니다.
+B안을 선택하여 dependencies 모듈·Depends·clock 주입과 lifespan 자원 정리 경계를 구현했습니다. 실제 DB·외부 client 통합은 후속입니다.
 
 ### Python 개발 규칙
 
@@ -42,7 +42,7 @@ Any·타입 예외는 외부 경계 등 필요한 곳에 이유를 남깁니다.
 
 #### 앱 조립 차용안
 
-Status: 사용자 지정 Thready 참조 구현 검토 · 적용안 논의 중 · 2026-09-07
+Status: 사용자 승인 · 함수 기반 조립·lifespan·health 구현 검증 · 2026-09-07
 
 참조 구현의 `main.py`·`core/app_builder.py`·`core/lifespan.py`를 읽고,
 앱 구성 항목을 모으는 책임과 실행 자원의 시작·종료 책임을 구분하는 방식을 검토했습니다.
@@ -75,8 +75,22 @@ flowchart TD
 우리 계약은 부분 초기화 실패에서도 이미 획득한 자원을 정리해야 하므로, 실제 자원 획득 직후
 정리를 등록하는 방식으로 구현·검증합니다. 이 관찰은 참조 서비스의 운영 장애를 재현했다는 뜻은 아닙니다.
 
-이번 적용안의 다음 구현 단위는 `lifespan`과 liveness/readiness입니다.
-정상 시작·종료, 준비 전 상태, 부분 초기화 실패 정리를 시험하며 DB·scheduler는 아직 연결하지 않습니다.
+`core/lifespan.py`와 `health.py`에 수명·health를 구현했습니다.
+`create_app(..., prepare=prepare_resources)`가 준비 함수를 명시적으로 받습니다.
+준비 함수는 앱과 `AsyncExitStack`을 받아 자원 획득 직후 정리를 등록합니다.
+현재 기본 준비 함수는 외부 자원이 없어 아무 자원도 만들지 않으며, 대역 주입으로 실패·취소를 시험합니다.
+정리는 역순으로 실행하며 cleanup 오류가 있어도 나머지를 시도합니다.
+원래 시작 실패·취소가 있으면 이를 다시 전파하고 cleanup 오류는 원인 체인으로 보존합니다.
+
+`/health/live`는 응답 가능한 앱의 생존, `/health/ready`는 준비 완료 200·미완료 503을 표현합니다.
+ready는 앱 조립 시 false, 준비 성공 후 true, cleanup 전에 false입니다.
+Uvicorn은 startup 완료 전 HTTP를 받지 않으므로 준비 전 503은 직접 ASGI 시험으로 확인했습니다.
+readiness가 업무 라우트의 실행을 차단하거나 drain 시작을 알려주는 자동 장치는 아닙니다.
+현재 readiness는 서버 drain 이후 lifespan 종료 때 내려갑니다. LB 연계·사전 drain 신호는 후속 배포 설계입니다.
+
+`SHUTDOWN_TIMEOUT_SECONDS`는 Uvicorn의 진행 작업 대기 시간이며 기본 15초입니다.
+lifespan cleanup 전체의 timeout은 아니며 실제 외부 자원 도입 시 자원별 종료 예산을 정합니다.
+SIGTERM 요청 완료·정리 순서는 격리 서버에서 검증했습니다. 강제 종료·반복 취소의 cleanup 보장은 하지 않습니다.
 
 ```mermaid
 flowchart TD

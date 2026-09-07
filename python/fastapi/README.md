@@ -43,9 +43,11 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 - `GET /v1/greetings?name=Marin`: 정규화된 이름의 인사와 UTC `generated_at`; 앞뒤 공백 제거 후 1~80자
 - `/docs`: Swagger UI
 - `/openapi.json`: OpenAPI 명세
+- `/health/live`: 생존 응답 200
+- `/health/ready`: 준비 완료 200, 미완료 503
 
 위 세 경로의 HTTP 200과 루트 응답을 실제 로컬 서버에서 확인했습니다.
-인사 API의 입력 검증·clock DI까지 구현했습니다. 자원 수명 관리·구조화 로그·metrics와
+인사 API의 입력 검증·clock DI·lifespan·health까지 구현했습니다. 구조화 로그·metrics와
 기존 전체 검증 명세는 아직 구현·검증하지 않았습니다.
 
 ## 명시적 DI
@@ -77,6 +79,7 @@ clock은 timezone-aware UTC datetime을 반환하는 계약입니다.
 | `SERVICE_VERSION` | OpenAPI의 서비스 버전; 패키지 빌드 버전과 별개 |
 | `SERVER_HOST` | 서버 바인딩 주소; 기본 loopback |
 | `SERVER_PORT` | 서버 포트; 1~65535 |
+| `SHUTDOWN_TIMEOUT_SECONDS` | 종료 시 진행 중 요청 대기 시간; 기본 15초, cleanup 전체 제한은 아님 |
 | `LOG_LEVEL` | Uvicorn 로그 수준; 소문자 사용 |
 
 설정은 시작 시 한 번 검증해 앱에 명시적으로 전달합니다. 잘못된 설정은 입력 원문을 출력하지 않고 종료합니다.
@@ -97,7 +100,13 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-인사 API·DI 시험을 포함한 현재 전체 테스트는 14개가 통과했습니다.
+lifespan·health·SIGTERM 시험을 포함한 현재 전체 테스트는 21개가 통과했습니다.
+시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
+실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
+외부 자원은 대역이며, 강제 종료·실제 DB·LB drain은 검증 범위 밖입니다.
+
+수명 흐름과 준비 함수 주입 계약은 [FastAPI 설계](../../design/implementations/fastapi.md#앱-조립-차용안)를 참고합니다.
+readiness는 lifespan 준비 성공 상태이며 DB 건강이나 무중단 배포 보장이 아닙니다.
 
 ### 개발 검증 기준
 
