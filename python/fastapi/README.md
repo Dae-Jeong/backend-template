@@ -88,10 +88,11 @@ curl -i 'http://127.0.0.1:18081/v1/greetings?name=Marin'
 ```
 
 `stop`은 컨테이너를 남겨두고 종료하며 `down`은 이 Compose 앱의 컨테이너·네트워크를 제거합니다.
-DB·외부 수집기는 생성하지 않습니다. 이미지 레지스트리에 push하지 않습니다.
+서버형 DB는 생성하지 않습니다. 선택 SQLite 파일은 `api-data` volume에 보관하며 `down`만으로 삭제되지 않습니다.
+모니터링 수집기는 `monitoring` profile로 선택합니다. 이미지 레지스트리에 push하지 않습니다.
 
 개인 설정을 적용할 때는 위 명령의 `--env-file .env.example`을 `--env-file .env`로 바꿉니다.
-Compose는 APP_NAME·SERVICE_VERSION·APP_ENVIRONMENT·LOG_LEVEL만 명시적으로 컨테이너에 전달합니다.
+Compose는 앱 설정과 `.env.example`의 DB 설정을 명시적으로 컨테이너에 전달합니다.
 env 파일 자체를 이미지나 컨테이너에 복사하지 않습니다. 내부 SERVER_HOST/PORT는 0.0.0.0:8000으로 고정하며
 host 게시 포트와 종료 예산은 루트 `compose.yaml`에서 함께 관리합니다. 앱 15초·Compose 20초입니다.
 
@@ -261,12 +262,13 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM·metrics·logging·응답 계약·업무 예외 시험을 포함한 현재 전체 테스트는 59개가 통과했습니다.
+lifespan·health·SIGTERM·metrics·logging·응답 계약·업무 예외·SQLite 기반 시험이 통과했습니다.
+DB 기반의 최신 검증 결과와 재현 절차는 [검증 기록](../../design/implementations/fastapi-verification.md#db-기반-실행-결과)에 있습니다.
 로그는 요청별 ID·서비스 문맥 분리, 취소·전송 오류·원래 예외 보존, 민감정보 제외,
 크기 상한·JSON 형식·출력 실패와 실제 Uvicorn 오류 중복 방지를 검증합니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
 실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
-외부 자원은 대역이며, 강제 종료·실제 DB·LB drain은 검증 범위 밖입니다.
+SIGTERM 시험의 외부 자원은 대역입니다. 실제 SQLite는 별도의 파일 DB 시험으로 검증하며 강제 종료·LB drain은 검증 범위 밖입니다.
 
 수명 흐름과 준비 함수 주입 계약은 [FastAPI 설계](../../design/implementations/fastapi.md#앱-조립-차용안)를 참고합니다.
 readiness는 lifespan 준비 성공 상태이며 DB 건강이나 무중단 배포 보장이 아닙니다.

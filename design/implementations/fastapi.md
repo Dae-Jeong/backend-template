@@ -25,7 +25,7 @@ uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검�
 ## 초기화와 DI
 
 [DI 두 가지 선택안](fastapi-di-options.md)에서 외부 라이브러리 방식과 dependencies/Depends 방식을 비교합니다.
-B안을 선택하여 dependencies 모듈·Depends·clock 주입과 lifespan 자원 정리 경계를 구현했습니다. 실제 DB·외부 client 통합은 후속입니다.
+B안을 선택하여 dependencies 모듈·Depends·clock 주입과 lifespan 자원 정리 경계를 구현했습니다. SQLite Primary 기반은 아래 DB 절에 있으며 외부 client 통합은 후속입니다.
 
 ### Python 개발 규칙
 
@@ -394,9 +394,9 @@ p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저�
 
 ## DB 연결 기반 계획
 
-Status: 업무 단위 트랜잭션 기준 합의 · SQLite 시작·PostgreSQL 후속 전환 계획 · 미구현 · 2026-09-08
+Status: SQLite Engine·Session·DI·DB 계측 구현 · 예약 저장과 PostgreSQL 전환 미구현 · 2026-09-08
 
-SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용하도록 제안합니다.
+SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용합니다.
 Engine·Session·DI·트랜잭션 수명은 공통으로 유지하고 SQLite PRAGMA·연결 옵션은 DB별 설정에 한정합니다.
 PostgreSQL 전환 시 드라이버·migration·타입/제약·잠금을 검토하며 실제 DB에서 동시성·멱등성을 다시 검증합니다.
 세부 실행 순서와 완료 기준은 [Task 6 다음 실행 단위](fastapi-tasks.md#다음-실행-단위)가 소유합니다.
@@ -473,7 +473,7 @@ WAL·BEGIN IMMEDIATE 등 잠금 전략은 후속 경합 시험에서 필요성�
 
 ### DB 계측과 로컬 모니터링 계획
 
-Status: Task 6-1/6-2 및 6-2M 범위에 포함 · 미구현 · 2026-09-08
+Status: Task 6-1/6-2/6-2M 로컬 구현·검증 완료 · 실제 예약 계측은 6-4 · 2026-09-08
 
 Engine은 연결 pool을 관리하고 Session 제공자는 Session 수명을 관리합니다. 모니터링은 이를 관측하며
 Session을 종료하거나 누수를 자동 복구하지 않습니다. Session 수와 점유 연결 수를 같은 값으로 취급하지 않습니다.
@@ -501,6 +501,8 @@ pool 내부의 reset rollback이나 시작 연결 확인을 업무 트랜잭션 
 멱등 키·예외 메시지는 노출하지 않습니다. 계측 실패가 DB 결과를 바꾸지 않도록 격리하고,
 기존 `/metrics` 실패 정책에 연결해 누락을 정상 수치로 공개하지 않습니다.
 DB 미설정 앱은 DB 지표를 노출하지 않으며, DB 활성 앱의 유휴 gauge는 0으로 노출합니다.
+고정 결과 라벨은 처음부터 0으로 초기화해 첫 증가를 수집합니다. 지연 histogram은 5ms부터 120s까지
+명시적 bucket을 사용하며 마지막은 +Inf입니다. p95는 bucket 기반 추정이며 표본 없는 구간은 No data입니다.
 
 파일 책임: `core/database.py`는 Engine과 listener 연결, `core/database_metrics.py`는 DB 지표 정의·기록,
 `core/metrics.py`는 기존 registry 공유에 필요한 최소 조정, `bootstrap/`는 앱별 조립·정리,

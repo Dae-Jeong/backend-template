@@ -5,7 +5,39 @@ Status: 명세 기준 · 기반 HTTP·관측과 단일 API Compose smoke 검증,
 [구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 이 목록은 실행 결과가 아닙니다.
 현재 실행 결과는 [단계별 task](fastapi-tasks.md)와 [사용 안내](../../python/fastapi/README.md)에 기록합니다.
 
-## 초기화
+## DB 기반 실행 결과
+
+확인일: 2026-09-08 · Task 6-1/6-2/6-2M. 예약·동시성·멱등성 업무 완료를 뜻하지 않습니다.
+
+- Python 3.14.7 / SQLAlchemy 2.0.52 / aiosqlite 0.22.1. 전체 pytest 75개, Ruff lint/format, ty, uv build 통과.
+- 파일 SQLite에서 transactional DDL rollback·foreign key 활성화·연결 무효화/회복·pool timeout·
+  앱별 격리·시작 실패 dispose·Session 취소 정리·업무 중간 실패·commit/rollback 실패를 검증했습니다.
+- 업무 취소 후 rollback 결과가 1건 기록되고 저장·활성 Session·점유 연결이 남지 않는 것을 확인했습니다.
+- Compose API는 `/app/data` named volume에 UID 10001로 SQLite를 생성하고 ready가 되었습니다.
+- 격리 시험 앱에서 점유 연결/활성 Session `0 → 1 → 0`, pool timeout `0 → 1`,
+  업무 결과 `committed=1, rolled_back=1, failed=0`을 `/metrics`·Prometheus·Grafana에서 대조했습니다.
+- 8개 DB 패널의 PromQL 실행·실제 PC 렌더링을 확인했습니다. 중단 시 DOWN/No data,
+  DB 미설정 시 UP/DB No data를 구분합니다. DB 미설정 재시작 직후 과거 histogram이 보이지 않도록
+  현재 DB pool 상한 지표의 존재도 확인합니다. p95는 bucket 기반 추정값입니다.
+- 시험용 앱과 임시 DB를 종료·정리하고 Prometheus의 시험용 target을 제거했습니다.
+
+재현은 `python/fastapi/`에서 아래 명령으로 시작합니다. 18082 포트가 비어 있는지 먼저 확인합니다.
+시험 앱은 Docker 수집기가 접근하도록 `0.0.0.0:18082`에 bind하며 로컬 검증 동안만 실행합니다.
+사용자 API에 시험 endpoint를 추가하지 않습니다.
+
+```sh
+uv tool run --from uv==0.12.10 uv run --locked python tests/manual_database_monitoring.py
+# DB 미설정 화면 비교: 위 프로세스를 종료한 뒤 실행
+uv tool run --from uv==0.12.10 uv run --locked python tests/manual_database_monitoring.py --without-db
+```
+
+검증 동안만 기존 `infra/monitoring/prometheus/prometheus.yml`의 `scrape_configs`에
+`job_name: db-verification`, `static_configs: [{targets: [host.docker.internal:18082]}]`를 추가하고
+`./scripts/compose.sh fastapi restart prometheus`로 반영합니다. Grafana의 DB 대시보드에서
+수집 대상을 `db-verification`으로 선택합니다. 완료 후 Ctrl-C로 시험 앱을 종료하고 추가한 target을
+제거한 뒤 Prometheus를 재시작합니다. 시험은 실제 사용자 앱·DB에 장애를 주입하지 않습니다.
+
+## 초기화 케이스
 
 | ID | 상황 | 통과 조건 |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~4 및 6-1/6-2 완료 · 6-2M 진행 · Task 5 계약 초안 검토 필요 · 2026-09-08
+Status: Task 1~4 및 6-1/6-2/6-2M 완료 · 다음 Task 5 예약 계약 확정 · 2026-09-08
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -193,7 +193,7 @@ flowchart LR
 이후 PostgreSQL로 전환하는 방향을 합의했습니다. 드라이버·DB별 연결 설정을 서비스와 분리하며 PostgreSQL 코드를 선행 구현하지 않습니다.
 연결 관리안은 표준 `sqlite3` 직접 사용 후보에서 SQLAlchemy AsyncEngine·aiosqlite 후보로 구체화했습니다.
 Engine·Session·트랜잭션 소유권과 첫 세부 task는 [DB 연결 기반 계획](fastapi.md#db-연결-기반-계획)이 소유합니다.
-실제 파일 기반 임시 DB와 독립 Session/연결로 검증합니다. 아직 DB 의존성·코드는 추가하지 않았습니다.
+실제 파일 기반 임시 DB와 독립 Session/연결로 검증합니다. DB 의존성·Engine·Session 코드는 추가했고 예약 저장은 아직 없습니다.
 SQLite는 단일 writer이므로 쓰기 경합이 직렬화됩니다. WAL도 여러 writer를 동시에 실행하게 만들지는 않습니다.
 이 실험으로 PostgreSQL의 행 잠금·다중 writer 처리량까지 검증했다고 설명하지 않습니다.
 schema 생성 방식·DB 파일 위치·잠금 대기 제한·HTTP 매핑은 구현 착수 시 구체화합니다.
@@ -274,6 +274,9 @@ Status: 완료 · 2026-09-08. 실제 파일 DB의 성공·중간 실패·지연 
 - 성공·rollback·commit/rollback 실패의 알려진 실행 건수와 지표가 일치합니다. 실제 예약 업무 연결은 6-4에서 확인합니다.
 
 ### Task 6-2M. 로컬 DB 모니터링 검증
+
+Status: 완료 · 2026-09-08. [실행 결과와 재현 절차](fastapi-verification.md#db-기반-실행-결과)에
+75개 테스트, 실제 파일 DB 장애 주입과 Prometheus·Grafana 대조 결과를 기록했습니다.
 
 목표:
 기존 로컬 Prometheus·Grafana에서 DB 기반의 점유·대기·실패를 확인할 수 있게 합니다.

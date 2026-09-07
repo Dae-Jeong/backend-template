@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from pathlib import Path
 from time import monotonic
 
@@ -118,7 +119,7 @@ def test_atomic_business_and_finalized_metrics(tmp_path: Path, mode: str) -> Non
             )
             assert sample(app, "db_transactions_total", outcome=outcome) == 1
             if mode != "success":
-                assert sample(app, "db_transactions_total", outcome="committed") is None
+                assert sample(app, "db_transactions_total", outcome="committed") == 0
             assert sample(app, "db_sessions_active") == 0
             assert sample(app, "db_pool_connections_in_use") == 0
 
@@ -224,4 +225,44 @@ def test_sqlite_lock_is_not_pool_timeout(tmp_path: Path) -> None:
             assert sample(app, "db_pool_timeouts_total") == 0
             assert sample(app, "db_pool_connections_in_use") == 0
 
+    asyncio.run(scenario())
+
+
+def test_business_cancellation_records_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        app = create_app(
+            Settings(db_primary_url=f"sqlite+aiosqlite:///{tmp_path}/cancel.db")
+        )
+        entered = asyncio.Event()
+
+        async def pause(session, metrics):
+            await original(session, metrics)
+            await session.execute(text("INSERT INTO parent VALUES (7)"))
+            entered.set()
+            await asyncio.Future()
+
+        monkeypatch.setattr(sys.modules[__name__], "acquire_primary_connection", pause)
+        async with app.router.lifespan_context(app):
+            await schema(app)
+
+            async def run():
+                async with primary_session(
+                    app.state.primary_session_factory, app.state.database_metrics
+                ) as session:
+                    await write_sample(session, app.state.database_metrics)
+
+            task = asyncio.create_task(run())
+            await asyncio.wait_for(entered.wait(), 2)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert sample(app, "db_transactions_total", outcome="rolled_back") == 1
+            assert sample(app, "db_sessions_active") == 0
+            assert sample(app, "db_pool_connections_in_use") == 0
+            async with app.state.primary_engine.connect() as connection:
+                assert await connection.scalar(text("SELECT count(*) FROM parent")) == 0
+
+    original = acquire_primary_connection
     asyncio.run(scenario())

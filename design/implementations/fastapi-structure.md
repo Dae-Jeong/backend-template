@@ -20,7 +20,7 @@ DI 조립은 [DI 설계](fastapi-di-options.md)가 소유합니다.
 ## 현재 실제 구조
 
 아래 경로는 `python/fastapi/` 기준입니다. `src/`와 `tests/`는 같은 레벨입니다.
-아직 DB 접근이 없으므로 `repositories/`·ORM 모델·migration 폴더는 만들지 않습니다.
+DB Engine·Session 기반은 있으며 업무 저장은 아직 없어 `repositories/`·ORM 모델·migration 폴더는 만들지 않습니다.
 
 ```mermaid
 flowchart TD
@@ -31,11 +31,12 @@ flowchart TD
     SRC --> ROUTERS["routers/ · index.py · greetings.py · health.py · metrics.py"]
     SRC --> SERVICES["services/ · greetings.py"]
     SRC --> SCHEMAS["schemas/ · greetings.py · responses.py"]
-    SRC --> CONTRACTS["contracts/ · greetings.py"]
+    SRC --> CONTRACTS["contracts/ · greetings.py · database.py"]
     SRC --> EXCEPTIONS["exceptions/ · application.py"]
-    SRC --> DEP["dependencies/ · clock.py"]
+    SRC --> DEP["dependencies/ · clock.py · database.py"]
     SRC --> HTTP["http/ · errors.py · observation.py"]
     SRC --> CORE["core/ · settings.py · clock.py · contracts.py · logging.py · metrics.py"]
+    CORE --> DB["database.py · database_metrics.py"]
 ```
 
 | 경로 | 역할 |
@@ -51,6 +52,9 @@ flowchart TD
 | `contracts/greetings.py` | 내부 업무 결과 `Greeting`을 소유합니다. HTTP 스키마·ORM과 구분합니다. |
 | `exceptions/application.py` | 예상 가능한 업무 실패의 공통 타입입니다. 기능별 예외는 해당 기능 도입 시 이 폴더에 추가합니다. |
 | `dependencies/clock.py` | FastAPI Depends와 앱 상태 접근을 연결하는 HTTP provider입니다. |
+| `dependencies/database.py` | Primary Session·DB metrics의 HTTP provider입니다. 자동 commit은 하지 않습니다. |
+| `core/database.py`, `core/database_metrics.py` | Engine·SQLite 옵션·Session 수명·명시적 연결 획득과 DB 계측입니다. |
+| `contracts/database.py` | 연결 획득·업무 트랜잭션 결과 enum입니다. |
 | `http/errors.py` | 예외의 공개 응답 매핑·안전한 검증 오류·OpenAPI 오류 명세입니다. |
 | `http/observation.py` | ASGI 전송·실행 결과를 관측합니다. router와 별도로 HTTP 전체를 감싸는 경계입니다. |
 | `core/settings.py`, `core/clock.py` | 환경 설정과 UTC 시간 공급 구현입니다. |

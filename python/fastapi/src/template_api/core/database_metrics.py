@@ -6,6 +6,23 @@ from prometheus_client import Counter, Gauge, Histogram
 from template_api.contracts.database import AcquisitionOutcome, TransactionOutcome
 from template_api.core.metrics import HttpMetrics
 
+DB_DURATION_BUCKETS = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    30,
+    60,
+    120,
+)
+
 
 @dataclass
 class DatabaseMetrics:
@@ -52,6 +69,7 @@ def create_database_metrics(owner: HttpMetrics, limit: int) -> DatabaseMetrics:
         "db_pool_connection_hold_seconds",
         "Time from checkout to return or detach.",
         labels,
+        buckets=DB_DURATION_BUCKETS,
         registry=owner.registry,
     ).labels(**labels)
     Gauge(
@@ -70,6 +88,7 @@ def create_database_metrics(owner: HttpMetrics, limit: int) -> DatabaseMetrics:
         "db_connection_acquire_seconds",
         "Explicit connection acquisition including connect and validation costs.",
         ("role", "outcome"),
+        buckets=DB_DURATION_BUCKETS,
         registry=owner.registry,
     )
     timeouts = Counter(
@@ -88,8 +107,15 @@ def create_database_metrics(owner: HttpMetrics, limit: int) -> DatabaseMetrics:
         "db_transaction_duration_seconds",
         "Business transaction duration including commit or rollback.",
         ("role", "outcome"),
+        buckets=DB_DURATION_BUCKETS,
         registry=owner.registry,
     )
+    # Initialize bounded labels so Prometheus can observe the first increment.
+    for acquisition_outcome in AcquisitionOutcome:
+        acquisition.labels("primary", acquisition_outcome.value)
+    for transaction_outcome in TransactionOutcome:
+        transactions.labels("primary", transaction_outcome.value)
+        duration.labels("primary", transaction_outcome.value)
     return DatabaseMetrics(
         owner,
         connections,
