@@ -1,6 +1,30 @@
-# 로컬 전용: compose.yaml과 함께 명시적으로 선택합니다.
+name: backend-template-${BACKEND_IMPLEMENTATION:-fastapi}
 services:
+  api:
+    build:
+      context: ${BACKEND_BUILD_CONTEXT:-./python/fastapi}
+    ports:
+      - "127.0.0.1:18081:8000"
+    environment:
+      APP_NAME: "${APP_NAME:-Backend Template}"
+      SERVICE_VERSION: "${SERVICE_VERSION:-0.1.0}"
+      APP_ENVIRONMENT: "${APP_ENVIRONMENT:-local}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # 컨테이너 내부 주소·포트와 종료 예산은 함께 관리합니다.
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8000"
+      SHUTDOWN_TIMEOUT_SECONDS: "15"
+    init: true
+    cpus: 0.5
+    mem_limit: 512m
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   prometheus:
+    profiles: [monitoring]
     image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -10,7 +34,7 @@ services:
     ports:
       - "127.0.0.1:19090:9090"
     volumes:
-      - ../../infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
@@ -23,6 +47,7 @@ services:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
   grafana:
+    profiles: [monitoring]
     image: grafana/grafana:13.2.1@sha256:f772d434e8fab0049deb2b1b30abd43342bcfca1537614aa8d36080232cf4283
     ports:
       - "127.0.0.1:13000:3000"
@@ -36,8 +61,8 @@ services:
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/http.json
     volumes:
-      - ../../infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../../infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]

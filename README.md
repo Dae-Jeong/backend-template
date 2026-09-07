@@ -36,12 +36,29 @@ flowchart TB
 어떤 기능과 도구를 실제로 제공할지는 구현별 설계에서 정합니다. 공통 책임이 있다는 이유로 모든 계층이나 외부 시스템을 미리 만들지는 않습니다.
 
 `design/`는 설계 정본입니다. 다른 저장소의 아이디어를 추가로 찾아야 이해할 수 있는 구조로 만들지 않습니다.
-`infra/monitoring/`은 수집기·대시보드 설정을 소유하고, 구현별 로컬 실행 파일이 이를 참조합니다.
+`compose.yaml` 하나가 로컬 실행을 정의하고, `local.sh`가 사용할 구현을 선택합니다.
+`infra/monitoring/`은 Compose가 참조하는 수집기·대시보드 설정을 소유합니다.
 현재 연결·검증 범위는 [로깅과 관측](design/observability.md)에서 안내합니다.
 
 언어·프레임워크·패키지·실행 명령은 구현별 문서가 소유합니다. 루트 설명은 특정 구현을 전체 Backend의 기준으로 삼지 않습니다.
 
 ## 사용할 방식
+
+로컬 컨테이너는 저장소 루트에서 실행합니다. 현재 선택 가능한 구현은 `fastapi`입니다.
+
+```sh
+./local.sh fastapi up --build --wait
+# 모니터링도 함께 실행
+./local.sh fastapi --profile monitoring up --build --wait
+# 모니터링만 중지
+./local.sh fastapi stop grafana prometheus
+# 전체 중지, 보관 데이터 유지
+./local.sh fastapi --profile monitoring stop
+```
+
+스크립트는 구현을 선택한 뒤 나머지 인자를 Docker Compose에 전달합니다.
+모니터링은 기본 비활성이며, 이미 실행 중인 모니터링은 profile을 생략해도 자동 종료되지 않습니다.
+앱별 Dockerfile·환경 예시와 사용 안내는 각 구현이 소유합니다. 이 Compose는 로컬 전용입니다.
 
 소비 저장소에서 이 저장소를 Git submodule로 연결해 특정 커밋을 고정하고, 구현된 템플릿을 서비스 경로로 복사하는 방식을 계획합니다. submodule 연결과 런타임 패키지 import는 다릅니다. 템플릿 원본 업데이트가 복사한 서비스에 자동 적용되지는 않습니다.
 

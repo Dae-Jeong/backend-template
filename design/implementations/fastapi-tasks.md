@@ -26,7 +26,7 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 5 | 구조화 로그 · 로컬 완료 | 표준 logging, JSON·허용 필드, 요청 ID·ContextVar·실패 격리·실제 Uvicorn 오류 중복 방지 검증 | 4 |
 | 6 | 응답 계약 · 기반 완료 | 성공 data·Problem Details, 422/404/405/500·공개 코드·요청 ID·원문 제외·Swagger 일치 검증. 업무 오류는 기능 도입 시 추가 | 2·4 |
 | 7 | 컨테이너 실행 · 로컬 완료 | 단일 API 빌드·healthy·응답/관측·UID 10001·env/dev 제외·자원/로그 상한 설정·유휴 종료·재기동 검증 | 4 |
-| 7 보완 | 로컬 모니터링 · 완료 | Prometheus·Grafana 선택 Compose, 자동 대시보드, 요청 집계·수집 단절·복구 검증 | 4 |
+| 7 보완 | 로컬 모니터링 · 완료 | 단일 Compose·구현 선택 스크립트·monitoring profile, 자동 대시보드, 요청 집계·수집 단절·복구 검증 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
 | 9 | DB 통합 | DB·driver·저장 도구 선택, 격리 DB 대상, migration, pool 예산·timeout·트랜잭션 소유권 | 6 |
 | 10 | 동시성 보호 | DB 제약·조건부 변경・잠금 중 필요한 방식, 독립 연결 경합에서 초과 예약 방지 | 7 |
@@ -130,8 +130,8 @@ INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_EN
 컨테이너 진행: docker init 생성 후 uv lock·멀티 스테이지·비 root·readiness·loopback 게시를 적용했습니다.
 linux/arm64 실제 빌드·healthy·200/422·Swagger/metrics/JSON 로그·UID/dev/env 제외와 자원/로그 보관 설정을 확인했습니다.
 SIGTERM 종료 로그·OOM=false·exit 143과 재기동 healthy를 확인했습니다. 컨테이너 내 진행 요청 drain·부하·amd64·실제 로그 회전은 미검증입니다.
-모니터링 보완: 선택 Compose에 Prometheus·Grafana를 추가하고 공식 file provisioning으로 대시보드를 등록했습니다.
-실행 조합은 `python/fastapi/monitoring.local.yml`, 수집기·대시보드 설정은 `infra/monitoring/`으로 구분했습니다.
+모니터링 보완: 루트 Compose의 선택 profile에 Prometheus·Grafana를 추가하고 공식 file provisioning으로 대시보드를 등록했습니다.
+루트 `compose.yaml` 하나와 구현 선택용 `local.sh`를 사용하고 수집기·대시보드 설정은 `infra/monitoring/`에 둡니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.
 설정과 검증 한계는 [로컬 모니터링](fastapi.md#로컬-모니터링)이 소유합니다.
 Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 검증 명세의 모든 항목 완료를 뜻하지 않습니다.

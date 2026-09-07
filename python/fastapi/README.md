@@ -57,20 +57,20 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 기존 uv 서버의 18080과 구분해 컨테이너는 **127.0.0.1:18081**로 게시합니다. 포트 점유를 먼저 확인합니다.
 
 ```sh
-docker compose --env-file .env.example config --quiet
-docker compose --env-file .env.example build
-docker compose --env-file .env.example up --wait --wait-timeout 60
-docker compose --env-file .env.example ps
+../../local.sh fastapi config --quiet
+../../local.sh fastapi build
+../../local.sh fastapi up --wait --wait-timeout 60
+../../local.sh fastapi ps
 curl -i 'http://127.0.0.1:18081/v1/greetings?name=Marin'
-docker compose --env-file .env.example logs -f api
+../../local.sh fastapi logs -f api
 ```
 
 [컨테이너 Swagger](http://127.0.0.1:18081/docs), [readiness](http://127.0.0.1:18081/health/ready),
 [metrics](http://127.0.0.1:18081/metrics)에서 확인합니다. 로그 조회만 종료하려면 Ctrl+C입니다.
 
 ```sh
-docker compose --env-file .env.example stop api
-docker compose --env-file .env.example down
+../../local.sh fastapi stop api
+../../local.sh fastapi down
 ```
 
 `stop`은 컨테이너를 남겨두고 종료하며 `down`은 이 Compose 앱의 컨테이너·네트워크를 제거합니다.
@@ -79,7 +79,7 @@ DB·외부 수집기는 생성하지 않습니다. 이미지 레지스트리에 
 개인 설정을 적용할 때는 위 명령의 `--env-file .env.example`을 `--env-file .env`로 바꿉니다.
 Compose는 APP_NAME·SERVICE_VERSION·APP_ENVIRONMENT·LOG_LEVEL만 명시적으로 컨테이너에 전달합니다.
 env 파일 자체를 이미지나 컨테이너에 복사하지 않습니다. 내부 SERVER_HOST/PORT는 0.0.0.0:8000으로 고정하며
-host 게시 포트와 종료 예산은 `compose.yaml`에서 함께 관리합니다. 앱 15초·Compose 20초입니다.
+host 게시 포트와 종료 예산은 루트 `compose.yaml`에서 함께 관리합니다. 앱 15초·Compose 20초입니다.
 
 ```mermaid
 flowchart LR
@@ -135,12 +135,12 @@ health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니�
 
 ## 로컬 모니터링
 
-기본 Compose에 선택 파일을 더하면 Prometheus와 Grafana가 실행됩니다.
+루트 Compose의 `monitoring` profile을 활성화하면 Prometheus와 Grafana가 실행됩니다.
 이 디렉터리에서 실행하며 13000·19090 포트가 비어 있는지 먼저 확인합니다.
 
 ```sh
-docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml up --wait --wait-timeout 90
-docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
+../../local.sh fastapi --profile monitoring up --wait --wait-timeout 90
+../../local.sh fastapi --profile monitoring exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
 ```
 
 - [Grafana 대시보드](http://127.0.0.1:13000/d/backend-http-local): 로그인 없이 읽기 전용으로 조회합니다.
@@ -155,7 +155,7 @@ docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml e
 모니터링만 중지하려면 다음 명령을 실행합니다. named volume의 데이터는 유지합니다.
 
 ```sh
-docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml stop grafana prometheus
+../../local.sh fastapi --profile monitoring stop grafana prometheus
 ```
 
 모든 게시 포트는 loopback이며 이 익명 Viewer 설정은 로컬 전용입니다.

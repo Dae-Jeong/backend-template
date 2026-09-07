@@ -270,7 +270,7 @@ CancelledError를 삼키지 않고 cleanup 후 다시 전파합니다. 관측 �
 
 Status: 단일 API 이미지·Compose 구현 및 linux/arm64 검증 · 2026-09-07
 
-실행 정의는 [Dockerfile](../../python/fastapi/Dockerfile)과 [compose.yaml](../../python/fastapi/compose.yaml),
+실행 정의는 [Dockerfile](../../python/fastapi/Dockerfile)과 [compose.yaml](../../compose.yaml),
 명령·접속 주소는 [사용 안내](../../python/fastapi/README.md#컨테이너-실행)가 소유합니다.
 `docker init`으로 생성한 Python 기본 파일을 기존 uv 프로젝트에 맞게 수정했습니다.
 
@@ -278,7 +278,7 @@ Python 3.14.7·uv 0.12.10 공식 이미지를 버전·manifest digest로 고정�
 builder에서 `uv sync --locked --no-dev --no-editable`로 설치하고 런타임에는 설치된 환경만 복사합니다.
 로컬 env·tests·cache·dist는 빌드 context 허용 목록에서 제외합니다. 최종 앱은 UID/GID 10001로 실행합니다.
 
-Compose는 단일 API만 실행하고 host 127.0.0.1:18081을 컨테이너 8000에 연결합니다.
+기본 Compose는 모니터링 profile 없이 단일 API를 실행하고 host 127.0.0.1:18081을 컨테이너 8000에 연결합니다.
 앱 서비스 이름·버전·환경·로그 수준은 명시적으로 환경변수에 전달합니다.
 내부 바인딩 0.0.0.0:8000과 앱 종료 대기 15초·Compose 종료 유예 20초는 Compose에서 함께 관리합니다.
 컨테이너의 0.0.0.0 바인딩이 host 전체 공개를 뜻하지 않습니다. host 게시 주소는 loopback입니다.
@@ -302,7 +302,7 @@ Docker Desktop에서 이미지 빌드·healthy·200/422 응답·Swagger·metrics
 
 Status: Prometheus·Grafana 선택 확장 구현·로컬 검증 · 2026-09-07
 
-[monitoring.local.yml](../../python/fastapi/monitoring.local.yml)을 기본 Compose와 함께 실행합니다.
+[루트 compose.yaml](../../compose.yaml)의 `monitoring` profile을 선택합니다.
 버전·digest·보관·자원 설정은 이 파일, 수집 대상과 대시보드는
 [infra/monitoring/](../../infra/monitoring/), 실행 명령은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)가 소유합니다.
 공식 Prometheus 설정과 Grafana file provisioning을 사용하며 앱에 별도 전송 코드를 추가하지 않습니다.
