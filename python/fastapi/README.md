@@ -118,6 +118,14 @@ curl -i http://127.0.0.1:18080/v1/greetings
 등록 예제와 미등록 오류의 500 정책은 [업무 예외 처리](../../design/implementations/fastapi.md#업무-예외-처리)에 있습니다.
 현재 실제 업무 예외를 발생시키는 endpoint는 없으며 테스트 대역으로 처리 경로를 검증합니다.
 
+이 디렉터리에서 다음 명령으로 테스트 앱의 `GET /test/resource`를 호출해 확인합니다.
+등록 시 404·NOT_FOUND, 미등록 시 500·INTERNAL_ERROR와 오류 로그를 검증합니다.
+이 endpoint는 테스트 앱에만 존재합니다.
+
+```sh
+uv tool run --from uv==0.12.10 uv run --locked pytest -q tests/test_application_errors.py
+```
+
 ## Metrics 확인
 
 라이브러리 설치에 더해 요청 계측과 `GET /metrics`를 연결했습니다.
