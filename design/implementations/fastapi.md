@@ -394,7 +394,7 @@ p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저�
 
 ## DB 연결 기반 계획
 
-Status: SQLite 시작·PostgreSQL 후속 전환 계획 · 미구현 · 2026-09-07
+Status: 업무 단위 트랜잭션 기준 합의 · SQLite 시작·PostgreSQL 후속 전환 계획 · 미구현 · 2026-09-08
 
 SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용하도록 제안합니다.
 Engine·Session·DI·트랜잭션 수명은 공통으로 유지하고 SQLite PRAGMA·연결 옵션은 DB별 설정에 한정합니다.
@@ -414,8 +414,10 @@ aiosqlite는 연결별 백그라운드 스레드로 SQLite 작업을 처리하�
 flowchart LR
     SETTINGS["Settings · DB URL과 대기/풀 예산"] --> LIFE["lifespan · Engine 생성과 연결 확인"]
     LIFE --> FACTORY["앱별 async_sessionmaker"]
-    FACTORY --> DEP["Depends · 요청별 AsyncSession"]
-    DEP --> SERVICE["service · 명시적 트랜잭션"]
+    FACTORY --> DEP["HTTP dependency · 새 Primary Session 제공/정리"]
+    DEP --> ROUTER["router · 입력 해석과 결과 전달"]
+    ROUTER --> SERVICE["바깥쪽 업무 service · begin / commit / rollback"]
+    FUTURE["후속 진입점 · WebSocket 메시지 / GraphQL mutation"] -. "업무별 Session으로 호출 · 미구현" .-> SERVICE
     SERVICE --> REPO["repository · 같은 Session으로 SQL"]
     LIFE -->|"시작 실패 / 종료"| DISPOSE["engine.dispose"]
 ```
@@ -423,6 +425,36 @@ flowchart LR
 Engine은 실제 단일 연결이 아니라 연결·pool의 관리 객체입니다. import 시 전역 Engine/Session을 생성하지 않습니다.
 Session은 요청마다 만들되 DB 연결은 필요할 때 pool에서 획득합니다. 요청 종료 dependency에 자동 commit을 숨기지 않습니다.
 서비스의 명시적인 트랜잭션 구간에서 성공 시 commit, 실패 시 rollback하고 응답 직렬화 전에 완료합니다.
+
+### Session 제공과 트랜잭션 소유권
+
+- 첫 구현의 이름은 `DB_PRIMARY_URL`, `primary_engine`, `primary_session_factory`,
+  `get_primary_session`, `PrimarySessionDep`로 명시합니다. 실제 연결은 단일 Primary이며
+  미사용 Replica 설정·Engine·provider는 만들지 않습니다. 읽기 선택 정책은 [공통 DB 기준](../backend.md#서버db-확장-전략)을 따릅니다.
+- `dependencies/database.py`는 새 `AsyncSession`을 생성해 `yield`하고 정리합니다.
+  HTTP router만 `Depends`를 사용하고 업무에는 Session을 일반 인자로 전달합니다.
+  일반 JSON API는 라우터 종료 후 Session을 사용하지 않도록 하고 `scope="function"`으로 정리합니다.
+- 바깥쪽 예약 업무 함수가 `async with session.begin()`을 소유합니다. 정상 블록 종료 시 commit,
+  예외가 블록 밖으로 전파되면 rollback합니다. commit 실패도 업무 실패로 전파합니다.
+  내부 서비스·Repository는 같은 Session을 전달받으며 별도 `begin()`·commit을 수행하지 않습니다.
+  필요한 `flush()`는 허용하지만 최종 확정으로 취급하지 않습니다.
+- 업무에 전달할 Session에는 사전 쿼리를 실행하지 않습니다. 인증 등에서 DB 조회가 필요하면
+  별도 수명의 Session을 사용하며, 변경 판단에 필요한 상태는 업무 트랜잭션 안에서 다시 확인합니다.
+  이는 SQLAlchemy autobegin으로 이미 시작된 트랜잭션에 다시 `begin()`하는 충돌을 피하기 위한 기준입니다.
+- 업무 결과는 Session 종료 뒤 추가 SQL이 필요 없는 값·계약 타입으로 만듭니다.
+  commit 이후 응답 직렬화·전송 실패는 이미 확정된 변경을 되돌리지 않으며 멱등성·재조회로 대응합니다.
+- WebSocket 도입 시 연결 전체가 아닌 메시지가 실행하는 업무마다 Session·트랜잭션을 관리합니다.
+  GraphQL 도입 시 mutation이 업무를 호출하며, 한 요청에 여러 mutation을 넣었다는 이유만으로
+  전체 원자성을 보장하지 않습니다. 전체 원자성이 필요하면 하나의 조합 업무로 정의합니다.
+  동시 실행 resolver·메시지 task는 같은 Session을 공유하지 않습니다.
+- WebSocket·GraphQL·worker 지원은 후속 적용 기준이며 이번 구현 범위가 아닙니다.
+  공통 트랜잭션 미들웨어·데코레이터·범용 Unit of Work는 먼저 추가하지 않습니다.
+
+참고: [FastAPI yield dependency scope](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope),
+[SQLAlchemy Session 트랜잭션](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html).
+
+### 연결 설정과 검증
+
 초기 URL 예시는 `sqlite+aiosqlite:///./data/reservations.db`이며 실제 파일은 Git에서 제외합니다.
 컨테이너 경로·volume·비 root 쓰기 권한은 연결을 추가하는 단계에서 함께 설정합니다.
 URL 미설정 상태의 DB 없는 기본 앱을 유지하고, DB를 설정한 앱은 시작 연결 확인 실패 시 ready가 되지 않습니다.

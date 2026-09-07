@@ -218,7 +218,7 @@ Task 6-1/6-2는 예약 정책 확정 전에도 진행할 수 있으며, Task 6-3
 | 실행 순서 | Task | 작업 | 완료 기준 |
 | --- | --- | --- | --- |
 | 1 | 6-1 | SQLite Engine·설정·lifespan | uv 의존성 추가, DB URL/연결·대기 예산, 실제 파일 DB 연결, 시작 실패/종료 정리, 컨테이너 저장 경로·권한 확인 |
-| 2 | 6-2 | Session·DI·트랜잭션 | 요청별 Session 격리, 명시적 commit·실패 rollback, pool 획득 timeout·연결 반환 검증 |
+| 2 | 6-2 | Session·DI·트랜잭션 | [소유권 기준](fastapi.md#session-제공과-트랜잭션-소유권)에 따라 요청/동시 task 격리, 업무 단위 commit·중간 실패 전체 rollback·commit 실패 시 성공 응답 방지, 사전 쿼리 없는 Session 전달, pool 획득 timeout·연결 반환 검증 |
 | 3 | 5 확정 | 예약·멱등 계약 | 성공·품절·키 범위·다른 입력 충돌·진행 중 중복·보존/실패 재시도 정책과 HTTP 응답 합의 |
 | 4 | 6-3 | 모델·Alembic migration | 수량·예약·키 저장에 필요한 schema와 제약, 새 임시 DB에 upgrade, 반복 실행·제약 위반 검증 |
 | 5 | 6-4 | 순차 예약 API | service/repository·업무 예외 연결, 성공·품절·중간 실패에서 차감과 예약의 원자성 검증 |
