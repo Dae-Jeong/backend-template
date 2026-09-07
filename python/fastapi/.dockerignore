@@ -5,6 +5,11 @@
 !pyproject.toml
 !uv.lock
 !README.md
+!alembic.ini
+!migrations/
+!migrations/**
+migrations/**/__pycache__/
+migrations/**/*.pyc
 !src/
 !src/**
 src/**/__pycache__/

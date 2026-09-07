@@ -19,6 +19,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     SERVER_HOST=0.0.0.0 \
     SERVER_PORT=8000
 COPY --from=build /app/.venv /app/.venv
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN mkdir /app/data && chown 10001:10001 /app/data
 USER 10001:10001
 EXPOSE 8000
