@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from template_api.app import create_app
 from template_api.core.settings import Settings
+from template_api.http_observation import HttpObservation
 
 
 def main() -> None:
@@ -19,8 +20,9 @@ def main() -> None:
             print(f"{field}: {detail['type']}", file=sys.stderr)
         raise SystemExit(1) from None
 
+    app = create_app(settings)
     uvicorn.run(
-        create_app(settings),
+        HttpObservation(app, app.state.metrics),
         host=settings.server_host,
         port=settings.server_port,
         log_level=settings.log_level,

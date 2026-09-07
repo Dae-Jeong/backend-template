@@ -1,6 +1,6 @@
 # FastAPI 검증 케이스
 
-Status: 명세 기준 · 설정·인사 API·clock DI 일부 검증, 전체 계약 미완료 · 2026-09-07
+Status: 명세 기준 · 설정·DI·lifespan·HTTP metrics 검증, 로그 포함 전체 계약 미완료 · 2026-09-07
 
 [구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 이 목록은 실행 결과가 아닙니다.
 현재 실행 결과는 [단계별 task](fastapi-tasks.md)와 [사용 안내](../../python/fastapi/README.md)에 기록합니다.

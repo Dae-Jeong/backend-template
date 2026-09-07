@@ -10,7 +10,7 @@ Status: uv 환경·최소 앱 기동 확인 · 아래 전체 계약·자동 테�
 패키지·환경 관리는 uv를 사용합니다. Python은 최신 안정 버전을 사용하며 2026-09-07 확인 기준
 3.14.7입니다([공식 릴리스 목록](https://www.python.org/getit/source/)). 프리릴리스는 기본 선택에서 제외합니다.
 착수 시 최신 안정 패치와 의존성 호환성을 다시 확인하고 프로젝트에 버전을 고정합니다.
-FastAPI, Uvicorn, pydantic-settings, prometheus-client를 후보로 둡니다.
+FastAPI, Uvicorn, pydantic-settings, prometheus-client를 사용합니다.
 uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검사를 재현합니다.
 현재 설치 버전과 확인한 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
 추가 의존성은 해당 단계에서 호환성을 확인하고 uv로 추가합니다.
@@ -122,6 +122,12 @@ FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일
 
 ## 로깅과 metrics 매핑
 
+Metrics는 구현했고 아래 구조화 로깅·문맥 주입은 후속 계약입니다.
+`prometheus-client` 0.26.0이 counter·histogram·registry·텍스트 직렬화를 담당합니다.
+[공식 client](https://prometheus.github.io/client_python/exporting/http/asgi/)를 사용하며
+`uv add prometheus-client`로 설치했습니다. FastAPI Instrumentator도 검토했지만 전송 완료와
+후속 실행 오류·취소를 구분하는 현재 계약을 직접 제공하지 않아 그 ASGI 경계만 구현했습니다.
+
 표준 `logging.getLogger(__name__)`와 info/warning/error를 사용합니다. 고정 메시지와 허용한 extra만 전달합니다.
 TypedDict는 작성 시 도움이며 런타임 검증은 formatter/filter가 별도로 수행합니다.
 
@@ -141,13 +147,19 @@ background 작업은 별도 문맥·수명을 갖습니다. queue 도입 시 enq
 HTTP counter `http_requests_total`과 histogram `http_request_duration_seconds`를 제공합니다.
 앱별 registry를 사용하고 라벨은 제한된 method·route template·status·completion·execution입니다.
 status가 없으면 고정값 none을 쓰고 미일치 route는 unmatched로 합칩니다. health·metrics 요청은 제외합니다.
-지연 bucket 후보(초)는 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5입니다.
-CPU/RSS는 지원하는 process collector에서 확인하며 OOM·재시작은 컨테이너 관측 책임입니다.
+알려진 HTTP method 외 값은 OTHER로 합치며 원문 경로·query·사용자 입력을 라벨에 넣지 않습니다.
+지연 bucket(초)은 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5와 +Inf입니다.
+계측·직렬화 실패는 앱별 실패 상태를 남겨 이후 `/metrics`가 503을 반환합니다.
+이 상태는 앱 재생성 전까지 유지하며 누락된 registry를 정상으로 공개하지 않습니다.
+업무 응답·원래 예외는 유지합니다. 현재 단일 worker 메모리 집계이며 재시작 시 초기화됩니다.
+CPU/RSS process collector는 아직 연결하지 않았으며 OOM·재시작은 컨테이너 관측 책임입니다.
 시계열 수집기·저장·경보·HPA·프로파일링·분산 trace는 포함하지 않습니다.
 
 ## 요청 종료와 취소
 
-완성된 FastAPI 오류 처리 경계 바깥의 순수 ASGI wrapper로 관측하는 후보입니다.
+완성된 FastAPI 오류 처리 경계 바깥의 순수 ASGI wrapper로 metrics를 관측합니다.
+`run.py`가 `HttpObservation(app, app.state.metrics)`를 Uvicorn에 전달합니다.
+아래 요약 로그·문맥 설정과 복원은 후속이며 현재 wrapper는 요청별 지역 변수로 계측 상태를 격리합니다.
 내부 FastAPI 객체에서 DI override를 관리하고 wrapper는 설정·registry를 별도로 중복 소유하지 않습니다.
 HTTP 이외 scope는 그대로 위임하며 BaseHTTPMiddleware의 문맥 전달 제약에 의존하지 않습니다.
 
@@ -169,7 +181,7 @@ sequenceDiagram
 trailers는 첫 계약에서 제외하며 추가 시 완료 지점을 확장합니다. receive는 앱이 읽은 이벤트만 관측하고 body를 별도 소비하지 않습니다.
 disconnect 관측은 task 취소와 같지 않으며 즉시 탐지도 보장하지 않습니다. 전송 중 OSError는 일반 앱 오류와 분리합니다.
 
-completion 후보는 complete/cancelled/send_failed/disconnected/incomplete, execution은 returned/error/cancelled입니다.
+completion은 complete/cancelled/send_failed/disconnected/incomplete, execution은 returned/error/cancelled입니다.
 최종 body 완료 뒤 background 오류는 complete와 error를 함께 기록합니다. 지연은 body 완료 시 저장한 값입니다.
 요약은 앱 호출 종료 finally에서 1회 시도합니다. 실제 status 없는 취소를 499 전송으로 꾸미지 않습니다.
 CancelledError를 삼키지 않고 cleanup 후 다시 전파합니다. 관측 실패가 원래 실패나 문맥 복원을 방해하지 않게 합니다.

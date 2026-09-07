@@ -21,7 +21,8 @@ flowchart TD
     ENV["환경변수 · .env · 기본값"] --> SETTINGS["Settings 검증"]
     RUN["python -m template_api.run"] --> SETTINGS
     SETTINGS --> APP["create_app(settings)"]
-    APP --> SERVER["Uvicorn · 단일 worker"]
+    APP --> OBS["HttpObservation · 앱별 metrics"]
+    OBS --> SERVER["Uvicorn · 단일 worker"]
 ```
 
 공통 설계는 [design](../../design/README.md), 구현 계약은
@@ -46,9 +47,30 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 - `/health/live`: 생존 응답 200
 - `/health/ready`: 준비 완료 200, 미완료 503
 
-위 세 경로의 HTTP 200과 루트 응답을 실제 로컬 서버에서 확인했습니다.
-인사 API의 입력 검증·clock DI·lifespan·health까지 구현했습니다. 구조화 로그·metrics와
+인사 API의 입력 검증·clock DI·lifespan·health·HTTP metrics까지 구현했습니다. 구조화 로그와
 기존 전체 검증 명세는 아직 구현·검증하지 않았습니다.
+
+## Metrics 확인
+
+라이브러리 설치에 더해 요청 계측과 `GET /metrics`를 연결했습니다.
+`python -m template_api.run`이 FastAPI 바깥에 관측 wrapper를 연결합니다.
+`create_app`만 직접 실행하면 라우트는 있지만 요청 계측 wrapper는 적용되지 않습니다.
+
+1. [Swagger UI](http://127.0.0.1:18080/docs)에서 `GET /v1/greetings`를 실행합니다.
+2. 같은 Swagger의 `GET /metrics`를 실행하거나 [metrics](http://127.0.0.1:18080/metrics)를 엽니다.
+3. `http_requests_total`과 `http_request_duration_seconds_count`가 요청마다 증가하는지 확인합니다.
+
+```sh
+curl -fsS 'http://127.0.0.1:18080/v1/greetings?name=Marin'
+curl -fsS http://127.0.0.1:18080/metrics
+```
+
+Prometheus 텍스트 형식이며 Swagger는 조회 도구입니다. 시계열 저장·차트 서버는 설치하지 않았습니다.
+라벨·지연·실패 정책은 [관측 매핑](../../design/implementations/fastapi.md#로깅과-metrics-매핑)이 소유합니다.
+health와 metrics 조회 자체는 집계하지 않습니다. 현재 단일 worker·앱별 메모리 registry로,
+재시작하면 초기화됩니다. CPU/RSS collector와 다중 worker 집계는 아직 연결하지 않았습니다.
+`/metrics`는 API와 같은 listener를 쓰며 기본 loopback입니다. 별도 인증·접근 제한은 없으므로
+외부 배포 시 내부 접근 정책을 구성해야 합니다.
 
 ## 명시적 DI
 
@@ -102,7 +124,7 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM 시험을 포함한 현재 전체 테스트는 21개가 통과했습니다.
+lifespan·health·SIGTERM·metrics 시험을 포함한 현재 전체 테스트는 33개가 통과했습니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
 실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
 외부 자원은 대역이며, 강제 종료·실제 DB·LB drain은 검증 범위 밖입니다.

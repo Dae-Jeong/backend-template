@@ -33,6 +33,7 @@ flowchart TD
     PROJECT --> CONFIG["pyproject.toml · uv.lock · .python-version · .env.example"]
     SRC --> ENTRY["app.py · run.py · dependencies.py"]
     SRC --> APPCONTRACT["contracts.py · 앱 수명 계약"]
+    SRC --> HTTP["health.py · metrics.py · http_observation.py"]
     SRC --> CORE["core/ · contracts.py · settings.py · clock.py · lifespan.py"]
     SRC --> FEATURE["greetings/ · contracts.py · api.py · usecase.py"]
     TESTS --> FIXTURE["conftest.py · 공통 격리 fixture"]
@@ -51,11 +52,15 @@ flowchart TD
 | `src/template_api/core/clock.py` | UTC 시간 공급 구현을 제공합니다. |
 | `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
 | `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
+| `src/template_api/core/metrics.py` | 앱별 Prometheus registry·지표와 그 구현 상태를 소유합니다. 업무 공개 계약이 아닙니다. |
+| `src/template_api/metrics.py` | `/metrics` 직렬화·실패 응답 HTTP 경계입니다. |
+| `src/template_api/http_observation.py` | ASGI 전송·실행 결과를 관측하고 주입받은 지표에 기록합니다. |
 | `src/template_api/greetings/api.py` | 이름 입력 검증·라우팅·HTTP 응답 직렬화를 연결합니다. |
 | `src/template_api/greetings/contracts.py` | 기능의 불변 `Greeting` 결과 계약을 소유합니다. |
 | `src/template_api/greetings/usecase.py` | 계약을 받아 수행하는 일반 업무 함수를 소유합니다. |
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
 | `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
+| `tests/test_metrics.py` | 실제 HTTP 계측과 제어된 ASGI 실패·취소·앱별 지표 분리를 검증합니다. |
 | `tests/core/`, `tests/greetings/` | 책임별 검증을 묶습니다. 소스의 모든 파일·폴더와 일대일 대응을 강제하지 않습니다. |
 | `pyproject.toml`, `uv.lock`, `.python-version` | 패키지·개발 검사 기준·의존성 해석 결과·실행 Python 버전을 관리합니다. |
 | `.env.example` | 사용자가 복사할 환경 설정 예시입니다. 실제 `.env`는 Git에서 제외합니다. |
@@ -103,7 +108,7 @@ flowchart LR
 ## 공통 기반과 후속 배치
 
 공통 설정·시간·관측 기반처럼 여러 기능이 실제로 공유하는 책임만 `core/`에 둡니다.
-향후 로깅·metrics 기반은 `core/` 내부 파일 후보이고, HTTP 전용 관측 코드는 입력 경계에 배치합니다.
+metrics 기반은 `core/metrics.py`이며 로깅 기반도 `core/` 내부 파일 후보입니다. HTTP 전용 관측 코드는 입력 경계에 배치합니다.
 feature의 업무 이벤트·정책은 공통 로깅 기반을 사용하더라도 feature가 소유합니다.
 
 DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.
