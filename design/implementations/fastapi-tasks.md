@@ -252,6 +252,10 @@ OpenAPI를 확인했습니다. 이 단계의 API는 멱등성 연결 전이며 8
 
 ### Task 6-1. Engine과 pool 계측
 
+Task 7 실행 결과(2026-09-08): 두 앱·독립 Engine에서 재고 1개에 2개/12개 HTTP 요청을 동시에
+보내 성공 1개·나머지 품절·재고 0·예약 1개를 확인했습니다. SQLite 쓰기 잠금 timeout과 pool
+timeout은 각각 503의 별도 코드/Retry-After로 반환하며 잠금/연결 반환 후 재시도가 성공합니다.
+
 Status: 완료 · 2026-09-08. SQLAlchemy 2.0.52·aiosqlite 0.22.1을 `uv add`로 추가했습니다.
 기존 포함 63개 테스트와 Ruff·ty 통과. 파일 DB rollback·pool 고갈/무효화/회복·앱 재시작/격리·
 시작 실패 dispose·계측 실패 격리를 검증했습니다. Compose는 SQLite volume을 사용해 healthy를 확인했습니다.
