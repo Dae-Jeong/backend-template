@@ -1,0 +1,23 @@
+[project]
+name = "template-api"
+version = "0.1.0"
+description = "FastAPI backend starting point"
+readme = "README.md"
+requires-python = ">=3.14.7,<3.15"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic-settings>=2.15.0",
+    "uvicorn>=0.52.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.12.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
+    "ty>=0.0.78",
+]
