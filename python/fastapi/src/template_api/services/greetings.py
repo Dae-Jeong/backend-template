@@ -1,5 +1,5 @@
+from template_api.contracts.greetings import Greeting
 from template_api.core.contracts import Clock
-from template_api.greetings.contracts import Greeting
 
 
 def make_greeting(*, name: str, clock: Clock) -> Greeting:

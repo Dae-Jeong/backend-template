@@ -3,11 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import StringConstraints
 
-from template_api.greetings.schemas import GreetingData
-from template_api.greetings.usecase import make_greeting
-from template_api.http.dependencies import ClockDep
+from template_api.dependencies.clock import ClockDep
 from template_api.http.errors import PROBLEM_RESPONSES
-from template_api.http.schemas import Success
+from template_api.schemas.greetings import GreetingData
+from template_api.schemas.responses import Success
+from template_api.services.greetings import make_greeting
 
 router = APIRouter(prefix="/v1/greetings", tags=["greetings"])
 

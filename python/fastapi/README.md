@@ -187,9 +187,9 @@ curl -i 'http://127.0.0.1:18080/v1/greetings?name=Marin'
 ```mermaid
 flowchart TD
     FACTORY["create_app · clock 인자로 받음"] --> STATE["앱별 clock 참조"]
-    STATE --> PROVIDER["dependencies.get_clock"]
-    PROVIDER -->|"ClockDep · Depends"| ROUTE["greetings.api · 입력 검증"]
-    ROUTE -->|"name · clock 일반 인자"| WORK["greetings.usecase.make_greeting"]
+    STATE --> PROVIDER["dependencies.clock.get_clock"]
+    PROVIDER -->|"ClockDep · Depends"| ROUTE["routers.greetings · 입력 검증"]
+    ROUTE -->|"name · clock 일반 인자"| WORK["services.greetings.make_greeting"]
     WORK --> RESULT["Greeting · 불변 dataclass"]
     OVERRIDE["app.dependency_overrides"] -. "앱별 대역 교체" .-> PROVIDER
 ```
@@ -198,8 +198,8 @@ flowchart TD
 업무 단위 시험은 `make_greeting(name=..., clock=...)`을 직접 호출합니다.
 HTTP 시험은 `app.dependency_overrides[get_clock]`에 clock 함수를 반환하는 provider를 등록합니다.
 clock은 timezone-aware UTC datetime을 반환하는 계약입니다.
-공통 `Clock`은 `core/contracts.py`, 인사 결과 `Greeting`은 `greetings/contracts.py`,
-앱 수명 타입은 `bootstrap/contracts.py`, HTTP provider는 `http/dependencies.py`가 소유합니다.
+공통 `Clock`은 `core/contracts.py`, 인사 결과 `Greeting`은 `contracts/greetings.py`,
+앱 수명 타입은 `bootstrap/contracts.py`, HTTP provider는 `dependencies/clock.py`가 소유합니다.
 업무가 HTTP 조립 타입을 import하지 않습니다.
 
 ## 환경 설정

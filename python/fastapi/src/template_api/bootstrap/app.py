@@ -13,21 +13,16 @@ from template_api.core.clock import system_clock
 from template_api.core.contracts import Clock, LogContext
 from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
-from template_api.greetings.api import router as greetings_router
 from template_api.http.errors import (
-    PROBLEM_RESPONSES,
     http_error,
     internal_error,
     problem_openapi,
     validation_error,
 )
-from template_api.http.health import router as health_router
-from template_api.http.metrics import router as metrics_router
-from template_api.http.schemas import MessageData, Success
-
-
-def index() -> Success[MessageData]:
-    return Success(data=MessageData(message="Hello, FastAPI!"))
+from template_api.routers.greetings import router as greetings_router
+from template_api.routers.health import router as health_router
+from template_api.routers.index import router as index_router
+from template_api.routers.metrics import router as metrics_router
 
 
 def create_app(
@@ -50,7 +45,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_error)
     app.add_exception_handler(HTTPException, http_error)
     app.add_exception_handler(Exception, internal_error)
-    app.get("/", responses=PROBLEM_RESPONSES)(index)
+    app.include_router(index_router)
     app.include_router(greetings_router)
     app.include_router(health_router)
     app.include_router(metrics_router)

@@ -249,7 +249,7 @@ def test_exposition_failure_is_not_reported_as_empty_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "template_api.http.metrics.generate_latest",
+        "template_api.routers.metrics.generate_latest",
         Mock(side_effect=RuntimeError("broken exporter")),
     )
     app = create_app(Settings())

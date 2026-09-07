@@ -5,12 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from template_api.bootstrap.app import create_app
+from template_api.contracts.greetings import Greeting
 from template_api.core.clock import system_clock
 from template_api.core.contracts import Clock
 from template_api.core.settings import Settings
-from template_api.greetings.contracts import Greeting
-from template_api.greetings.usecase import make_greeting
-from template_api.http.dependencies import get_clock
+from template_api.dependencies.clock import get_clock
+from template_api.services.greetings import make_greeting
 
 
 def fixed_clock() -> datetime:
@@ -42,7 +42,7 @@ def test_invalid_input_does_not_execute_usecase(
     name: str | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     usecase = Mock(side_effect=AssertionError("업무 함수가 실행되면 안 됩니다."))
-    monkeypatch.setattr("template_api.greetings.api.make_greeting", usecase)
+    monkeypatch.setattr("template_api.routers.greetings.make_greeting", usecase)
     clock = Mock(side_effect=AssertionError("clock이 실행되면 안 됩니다."))
     app = create_app(Settings(), clock=clock)
     with TestClient(app) as client:

@@ -51,7 +51,7 @@ Status: 사용자 승인 · 함수 기반 조립·lifespan·health 구현 검증
 | 참조 구현의 방식 | 이 템플릿의 적용 제안 |
 | --- | --- |
 | Builder에서 앱 구성 항목을 모아 등록 | 기존 `create_app(settings, *, clock=...)`를 조립 지점으로 유지합니다. |
-| Container 생성·앱 연결 | 합의한 B안의 명시적 인자와 `http/dependencies.py`를 유지합니다. |
+| Container 생성·앱 연결 | 합의한 B안의 명시적 인자와 `dependencies/clock.py`를 유지합니다. |
 | 미들웨어·예외 처리·라우터 등록을 구분 | 필요한 기능을 구현할 때 해당 등록을 조립 지점에서 명시합니다. 커질 때만 작은 함수로 분리합니다. |
 | 별도 lifespan에서 시작·종료 | 자원 수명과 readiness를 lifespan에서 관리합니다. logging의 프로세스 설정은 `run.py`가 소유합니다. |
 | 제품의 DB·scheduler·외부 client 초기화 | 실제 기능 도입 단계에서 필요한 자원만 연결합니다. |
@@ -75,7 +75,7 @@ flowchart TD
 우리 계약은 부분 초기화 실패에서도 이미 획득한 자원을 정리해야 하므로, 실제 자원 획득 직후
 정리를 등록하는 방식으로 구현·검증합니다. 이 관찰은 참조 서비스의 운영 장애를 재현했다는 뜻은 아닙니다.
 
-`bootstrap/lifespan.py`와 `http/health.py`에 수명·health를 구현했습니다.
+`bootstrap/lifespan.py`와 `routers/health.py`에 수명·health를 구현했습니다.
 `create_app(..., prepare=prepare_resources)`가 준비 함수를 명시적으로 받습니다.
 준비 함수는 앱과 `AsyncExitStack`을 받아 자원 획득 직후 정리를 등록합니다.
 현재 기본 준비 함수는 외부 자원이 없어 아무 자원도 만들지 않으며, 대역 주입으로 실패·취소를 시험합니다.
@@ -113,8 +113,8 @@ factory/import에서 I/O·프로세스 logger 변경을 하지 않습니다. han
 FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일반 인자를 받습니다.
 `get_clock` provider가 시간 공급 함수를 반환하고, 업무 함수가 호출하도록 예제를 구성합니다.
 테스트는 provider override와 고정 clock으로 교체합니다. app.state는 provider가 접근하며 업무가 직접 조회하지 않습니다.
-현재 `http/dependencies.py`가 `get_clock`과 `ClockDep`를 소유하고, `core/contracts.py`가 시간 공급 계약을,
-`core/clock.py`가 UTC 구현을 소유합니다. 인사 결과는 `greetings/contracts.py`에 둡니다.
+현재 `dependencies/clock.py`가 `get_clock`과 `ClockDep`를 소유하고, `core/contracts.py`가 시간 공급 계약을,
+`core/clock.py`가 UTC 구현을 소유합니다. 인사 결과는 `contracts/greetings.py`에 둡니다.
 `create_app(settings, *, clock=system_clock)`가 참조를 조립하며 인사 API가 불변 업무 결과를 외부 응답 스키마로 변환합니다.
 
 `GET /v1/greetings?name=Marin`은 앞뒤 공백 제거 후 1~80자를 허용하고 message·UTC generated_at을 반환합니다.
@@ -125,8 +125,8 @@ FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일
 Status: 사용자 합의 · 첫 HTTP 계약 구현·검증 · 2026-09-07
 
 언어 독립 포맷은 [Backend HTTP 응답 계약](../backend.md#http-응답-계약)이 소유합니다.
-FastAPI는 `http/schemas.py`의 `Success[T]`·`Problem`·오류 enum으로 이 계약을 구현합니다.
-`greetings/schemas.py`는 외부 `GreetingData`를 소유하고 API가 내부 `Greeting`을 명시적으로 변환합니다.
+FastAPI는 `schemas/responses.py`의 `Success[T]`·`Problem`·오류 enum으로 이 계약을 구현합니다.
+`schemas/greetings.py`는 외부 `GreetingData`를 소유하고 API가 내부 `Greeting`을 명시적으로 변환합니다.
 성공 body를 다시 읽어 감싸는 middleware는 만들지 않습니다.
 
 `http/errors.py`가 RequestValidationError·HTTPException·예상 밖 Exception을 공개 오류로 변환합니다.

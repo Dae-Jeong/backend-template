@@ -133,7 +133,9 @@ SIGTERM 종료 로그·OOM=false·exit 143과 재기동 healthy를 확인했습�
 모니터링 보완: 루트 Compose의 선택 profile에 Prometheus·Grafana를 추가하고 공식 file provisioning으로 대시보드를 등록했습니다.
 루트 `compose.yaml` 하나와 구현 선택용 `scripts/compose.sh`를 사용하고 수집기·대시보드 설정은 `infra/monitoring/`에 둡니다.
 Python 빌드 버전은 `.python-version`에서 읽어 전달하며 Dockerfile의 빌드·런타임 base를 공유합니다.
-소스 배치 보완: 앱 조립·수명은 `bootstrap/`, 공통 HTTP 경계는 `http/`로 묶고 `core/`·`greetings/` 책임을 유지합니다.
+소스 배치 보완: 사용자 합의로 역할별 `routers/`·`services/`·`schemas/`·`contracts/`·`dependencies/`를 기본으로 적용했습니다.
+각 역할 안에서 `greetings.py`처럼 기능을 구분하며, `bootstrap/`·`core/`·HTTP 오류/관측 기반은 각각 책임을 유지합니다.
+DB 없는 현재 단계에서는 `repositories/`를 생성하지 않습니다.
 이동 후 기존 53개 테스트·lint·포맷·타입 검사·wheel 빌드와 정적 import 순환 검사를 통과했습니다.
 재빌드한 컨테이너에서 readiness·성공/422·OpenAPI·metrics·Prometheus 수집을 확인했습니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.

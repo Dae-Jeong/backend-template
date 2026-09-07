@@ -9,7 +9,7 @@ from starlette.types import Message
 from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
 from template_api.http.observation import HttpObservation
-from template_api.http.schemas import Problem
+from template_api.schemas.responses import Problem
 
 
 @pytest.mark.parametrize(
