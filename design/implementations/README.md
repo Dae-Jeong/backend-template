@@ -5,12 +5,17 @@
 
 | 구현 | 설계 | 검증 | 상태 |
 | --- | --- | --- | --- |
-| Python / FastAPI | [구현 설계](fastapi.md) | [검증 케이스](fastapi-verification.md) | 설계만 있으며 코드·manifest는 없습니다. |
+| Python / FastAPI | [구현 설계](fastapi.md) | [검증 케이스](fastapi-verification.md) | [최소 앱](../../python/fastapi/README.md) 로컬 기동 확인. 전체 계약·자동 검증은 미완료입니다. |
 | Java / Spring Boot | 후속 결정 | 후속 결정 | 계획 후보이며 빈 프로젝트는 만들지 않습니다. |
+| TypeScript / Nest | 후속 결정 | 후속 결정 | 사용자 지정 후속 후보이며 빈 프로젝트는 만들지 않습니다. |
 | Rust | 프레임워크부터 후속 결정 | 후속 결정 | 계획 후보이며 빈 프로젝트는 만들지 않습니다. |
 
 첫 구현 후보는 FastAPI 예제 API·Settings·DI·lifespan·로깅·metrics·테스트·Docker Compose입니다.
-DB·인증·채팅·외부 API·모니터링 서버는 초기 구현에서 제외합니다.
+DB·인증·채팅·외부 API·모니터링 서버는 초기 기반 구현에서 제외합니다.
+
+1차 완료 목표는 초기 기반을 거쳐 한정 수량 예약의 동시성·멱등성까지 구현·검증하는 것입니다.
+[단계별 task](fastapi-tasks.md)에서 작은 단위로 사용자와 논의하고 진행합니다.
+DB 통합은 후속 단계에서 대상과 변경 범위를 확인하며, 이 목표가 인프라 구축의 일괄 승인을 뜻하지 않습니다.
 
 공통 계약 자체를 다시 정의하지 않고 [Backend](../backend.md), [개발 원칙](../engineering.md),
 [관측](../observability.md), [Runtime Review](../runtime-review.md)를 참조합니다.

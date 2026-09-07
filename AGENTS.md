@@ -8,4 +8,4 @@
 4. 구현·검증은 [구현별 설계 안내](design/implementations/README.md)에서 대상 기술의 문서를 선택합니다.
 5. 성능·런타임·용량 판단은 [Runtime Review](design/runtime-review.md)를 읽습니다.
 
-설치형 skill·MCP·에이전트 세션은 이 저장소에서 아직 설정하지 않았습니다. 현재 코드·실행 명령·자동 doctor도 없습니다.
+설치형 skill·MCP·에이전트 세션은 이 저장소에서 아직 설정하지 않았습니다. 현재 구현·실행·검증 상태는 README와 구현별 안내에서 확인합니다. 자동 doctor는 없습니다.

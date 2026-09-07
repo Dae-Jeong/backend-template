@@ -1,15 +1,19 @@
 # Python / FastAPI 구현 설계
 
-Status: design-only · 코드·테스트·manifest 미구현 · 2026-09-07
+Status: uv 환경·최소 앱 기동 확인 · 아래 전체 계약·자동 테스트 미완료 · 2026-09-07
 
 [Backend 계약](../backend.md)과 [관측 계약](../observability.md)을 FastAPI에서 구현하는 후보입니다.
 첫 기능은 DB 없는 인사 API이며 다른 서비스·사용자 환경에 의존하지 않습니다.
 
 ## 구성과 의존성
 
-Python 3.12, FastAPI, Uvicorn, pydantic-settings, prometheus-client를 후보로 둡니다.
-uv lockfile과 pytest·httpx·Ruff를 사용해 설치·테스트·lint를 재현하는 방향입니다.
-정확한 버전과 호환성은 구현 전 확인하고 고정합니다. 아직 패키지를 설치하지 않았습니다.
+패키지·환경 관리는 uv를 사용합니다. Python은 최신 안정 버전을 사용하며 2026-09-07 확인 기준
+3.14.7입니다([공식 릴리스 목록](https://www.python.org/getit/source/)). 프리릴리스는 기본 선택에서 제외합니다.
+착수 시 최신 안정 패치와 의존성 호환성을 다시 확인하고 프로젝트에 버전을 고정합니다.
+FastAPI, Uvicorn, pydantic-settings, prometheus-client를 후보로 둡니다.
+uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검사를 재현합니다.
+현재 설치 버전과 확인한 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
+추가 의존성은 해당 단계에서 호환성을 확인하고 uv로 추가합니다.
 
 | 경로 후보: `python/fastapi/` 기준 | 책임 |
 | --- | --- |
@@ -29,6 +33,9 @@ uv lockfile과 pytest·httpx·Ruff를 사용해 설치·테스트·lint를 재�
 공통 기반은 복사형 템플릿이며 별도 runtime 패키지나 generator는 현재 범위가 아닙니다.
 
 ## 초기화와 DI
+
+[DI 두 가지 선택안](fastapi-di-options.md)에서 외부 라이브러리 방식과 dependencies/Depends 방식을 비교합니다.
+B안을 선택하여 dependencies 모듈·Depends·clock 주입을 구현했습니다. 자원 수명 관련 후속 항목은 아직 미완료입니다.
 
 ### Python 개발 규칙
 
@@ -64,6 +71,8 @@ factory/import에서 I/O·프로세스 logger 변경을 하지 않습니다. han
 FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일반 인자를 받습니다.
 `get_clock` provider가 시간 공급 함수를 반환하고, 업무 함수가 호출하도록 예제를 구성합니다.
 테스트는 provider override와 고정 clock으로 교체합니다. app.state는 provider가 접근하며 업무가 직접 조회하지 않습니다.
+현재 `dependencies.py`가 `get_clock`과 `ClockDep`를 소유하고, `clock.py`가 시간 공급 타입과 UTC 구현을 소유합니다.
+`create_app(settings, *, clock=system_clock)`가 참조를 조립하며 인사 응답은 불변 dataclass를 FastAPI가 직렬화합니다.
 
 `GET /v1/greetings?name=Marin`은 앞뒤 공백 제거 후 1~80자를 허용하고 message·UTC generated_at을 반환합니다.
 공백만 있거나 길이를 초과하면 422이며 업무 함수는 실행하지 않습니다. 인증 없는 로컬 예제입니다.
@@ -178,6 +187,6 @@ runtime package는 실제 공통 동작과 호환성 유지 수요가 생기면 
 라이선스와 외부 코드 재사용 권한은 코드 도입 전에 확인합니다.
 
 정확한 의존성 버전·이미지·예외 처리 배치·ASGI wrapper·logging entrypoint의 호환성을 구현 전에 고정합니다.
-실행 명령은 파일을 만든 뒤 검증하여 README에 제공합니다. [검증 케이스](fastapi-verification.md)는 아직 모두 미실행입니다.
+확인한 실행 명령은 구현 README에 제공합니다. [검증 케이스](fastapi-verification.md)의 일부만 구현·실행했으며 완료 범위는 단계별 task와 사용 안내에 기록합니다.
 
 참고(확인일 2026-09-07): [FastAPI DI](https://fastapi.tiangolo.com/tutorial/dependencies/), [lifespan](https://fastapi.tiangolo.com/advanced/events/), [Starlette middleware](https://starlette.dev/middleware/), [ASGI HTTP](https://asgi.readthedocs.io/en/latest/specs/www.html), [Python logging](https://docs.python.org/3/library/logging.html), [ContextVar 로깅](https://docs.python.org/3/howto/logging-cookbook.html#use-of-contextvars), [Compose 환경변수](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
