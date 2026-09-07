@@ -217,8 +217,9 @@ Task 6-1/6-2는 예약 정책 확정 전에도 진행할 수 있으며, Task 6-3
 
 | 실행 순서 | Task | 작업 | 완료 기준 |
 | --- | --- | --- | --- |
-| 1 | 6-1 | SQLite Engine·설정·lifespan | uv 의존성 추가, DB URL/연결·대기 예산, 실제 파일 DB 연결, 시작 실패/종료 정리, 컨테이너 저장 경로·권한 확인 |
+| 1 | 6-1 | SQLite Engine·설정·lifespan·pool 계측 | uv 의존성 추가, DB URL/연결·대기 예산, 실제 파일 DB 연결, 시작 실패/종료 정리, 컨테이너 저장 경로·권한, 연결 점유/반환·점유 시간·pool 상한 계측 확인 |
 | 2 | 6-2 | Session·DI·트랜잭션 | [소유권 기준](fastapi.md#session-제공과-트랜잭션-소유권)에 따라 요청/동시 task 격리, 업무 단위 commit·중간 실패 전체 rollback·commit 실패 시 성공 응답 방지, 사전 쿼리 없는 Session 전달, pool 획득 timeout·연결 반환 검증 |
+| 2 다음 | 6-2M | DB metrics·로컬 대시보드 통합 | [계측 계약](fastapi.md#db-계측과-로컬-모니터링-계획)의 Session·획득·트랜잭션 지표와 실제 장애 주입 결과를 `/metrics`·Prometheus·Grafana에서 대조 |
 | 3 | 5 확정 | 예약·멱등 계약 | 성공·품절·키 범위·다른 입력 충돌·진행 중 중복·보존/실패 재시도 정책과 HTTP 응답 합의 |
 | 4 | 6-3 | 모델·Alembic migration | 수량·예약·키 저장에 필요한 schema와 제약, 새 임시 DB에 upgrade, 반복 실행·제약 위반 검증 |
 | 5 | 6-4 | 순차 예약 API | service/repository·업무 예외 연결, 성공·품절·중간 실패에서 차감과 예약의 원자성 검증 |
@@ -230,7 +231,8 @@ Task 6-1/6-2는 예약 정책 확정 전에도 진행할 수 있으며, Task 6-3
 ```mermaid
 flowchart LR
     ENGINE["6-1 · Engine"] --> SESSION["6-2 · Session/DI"]
-    SESSION --> CONTRACT["5 · 예약 계약 확정"]
+    SESSION --> MONITOR["6-2M · DB 관측 검증"]
+    MONITOR --> CONTRACT["5 · 예약 계약 확정"]
     CONTRACT --> SCHEMA["6-3 · schema/migration"]
     SCHEMA --> RESERVE["6-4 · 순차 예약"]
     RESERVE --> RACE["7 · 서로 다른 요청 경합"]
@@ -238,6 +240,40 @@ flowchart LR
     KEY --> RECOVERY["8-2 · 동시 중복/응답 유실"]
     RECOVERY --> PG["9 · PostgreSQL 전환/재검증"]
 ```
+
+### Task 6-1. Engine과 pool 계측
+
+목표:
+SQLite Primary 연결 기반과 연결 점유 계측을 함께 구현합니다.
+
+예상 결과:
+- Engine·설정·lifespan 및 DB 지표 파일이 [구현 설계](fastapi.md#db-계측과-로컬-모니터링-계획)의 책임대로 구성됩니다.
+- 실제 임시 파일 DB에서 checkout/checkin 후 점유 gauge가 원래 값으로 돌아가고 점유 시간 표본이 기록됩니다.
+- 연결 무효화·시작 실패·종료 정리에서 중복 집계가 없고, 앱 두 개의 registry/listener가 격리됩니다.
+- DB 없는 앱은 DB 지표가 없으며, 계측 실패가 원래 DB 결과·예외를 바꾸지 않는 시험이 통과합니다.
+
+### Task 6-2. Session과 업무 트랜잭션 계측
+
+목표:
+명시적 Session 제공과 업무 트랜잭션에 수명·획득·결과 계측을 연결합니다.
+
+예상 결과:
+- Session만 생성한 상태와 실제 연결 점유 상태의 수치가 구분되며, 정상·예외·취소 후 활성 Session과 연결 점유가 유휴 값으로 돌아갑니다.
+- 작은 pool을 독립 연결로 고갈시킨 시험에서 획득 시간과 timeout 한 건이 기록되고 반환 후 새 작업이 성공합니다. SQLite 잠금 실패는 pool timeout으로 세지 않습니다.
+- 시험용 업무에서 여러 저장의 중간 실패는 전체 rollback되고 commit 실패는 성공 응답·성공 지표를 남기지 않습니다.
+- 성공·rollback·commit/rollback 실패의 알려진 실행 건수와 지표가 일치합니다. 실제 예약 업무 연결은 6-4에서 확인합니다.
+
+### Task 6-2M. 로컬 DB 모니터링 검증
+
+목표:
+기존 로컬 Prometheus·Grafana에서 DB 기반의 점유·대기·실패를 확인할 수 있게 합니다.
+
+예상 결과:
+- `db-overview.json`이 기존 provisioning으로 로드되고 [지표 계약](fastapi.md#db-계측과-로컬-모니터링-계획)의 패널이 표시됩니다.
+- 격리된 시험 앱·파일 DB에서 유휴 → 연결 점유 → pool timeout → 반환/회복을 발생시키고 `/metrics`, Prometheus 조회, 실제 Grafana 화면의 값이 대조됩니다.
+- 실행 중인 사용자 앱에 실패를 주입하지 않으며 운영용 테스트 API를 추가하지 않습니다. 기존 수집 설정의 시험 대상 변경은 검증 후 복원합니다.
+- 앱 중지·수집 단절·DB 미설정·지연 표본 없음이 정상 0으로 표시되지 않으며 기존 HTTP 대시보드도 유지됩니다.
+- 실행 명령과 확인 결과는 기존 FastAPI 검증 문서에 기록합니다. 서버·SDK 추가, 운영 경보, Replica·PostgreSQL 구축은 포함하지 않습니다.
 
 ## Task 7. 서로 다른 요청의 경합
 

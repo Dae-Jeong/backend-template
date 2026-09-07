@@ -471,6 +471,60 @@ WAL·BEGIN IMMEDIATE 등 잠금 전략은 후속 경합 시험에서 필요성�
 참고: [SQLAlchemy asyncio](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html),
 [SQLite aiosqlite dialect](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html#aiosqlite).
 
+### DB 계측과 로컬 모니터링 계획
+
+Status: Task 6-1/6-2 및 6-2M 범위에 포함 · 미구현 · 2026-09-08
+
+Engine은 연결 pool을 관리하고 Session 제공자는 Session 수명을 관리합니다. 모니터링은 이를 관측하며
+Session을 종료하거나 누수를 자동 복구하지 않습니다. Session 수와 점유 연결 수를 같은 값으로 취급하지 않습니다.
+기존 `prometheus_client`와 앱별 registry를 재사용하고 SQLAlchemy의 공개 event API를 사용합니다.
+AsyncEngine의 `sync_engine` 인스턴스에 listener를 등록하며 전역 Engine 클래스에는 등록하지 않습니다.
+계측만을 위한 외부 수집 SDK나 서버를 추가하지 않습니다.
+
+| 지표 | 측정 경계와 의미 | 단계 |
+| --- | --- | --- |
+| `db_pool_connections_in_use` | checkout부터 checkin까지 점유 연결 수. 무효화·정리 경로에서도 중복 감소·음수 방지 | 6-1 |
+| `db_pool_connection_hold_seconds` | 같은 점유 구간의 시간. 쿼리 시간·pool 대기 시간과 다름 | 6-1 |
+| `db_pool_connection_limit` | pool 크기와 허용 overflow를 합친 인스턴스별 설정 상한 | 6-1 |
+| `db_sessions_active` | 우리 Session 제공자가 생성하고 아직 정리하지 않은 Session 수 | 6-2 |
+| `db_connection_acquire_seconds` | 업무 트랜잭션 안에서 명시적 `await session.connection()` 호출부터 반환/실패까지. pool 대기 외 새 연결·검증 비용을 포함 | 6-2 |
+| `db_pool_timeouts_total` | 위 획득 경계에서 확인한 pool timeout만 집계. SQLite 쓰기 잠금 timeout과 구분 | 6-2 |
+| `db_transactions_total`, `db_transaction_duration_seconds` | 바깥쪽 업무의 begin 진입부터 commit/rollback 정리 종료까지. 결과는 `committed`, `rolled_back`, `failed`로 구분 | 6-2 시험, 6-4 실제 예약 연결 |
+
+checkout 이벤트는 연결 획득 후 발생하므로 그 이벤트만으로 pool 대기 시간을 계산하지 않습니다.
+획득 계측은 `session.begin()` 안에 위치시키며 계측 때문에 사전 쿼리나 별도 트랜잭션을 만들지 않습니다.
+commit 시도 이벤트를 성공으로 세지 않습니다. commit 완료 후에만 `committed`, 업무 예외/취소 뒤
+rollback 완료 시 `rolled_back`, commit·rollback 자체 실패 시 `failed`를 기록합니다. 원래 예외·취소를 보존합니다.
+pool 내부의 reset rollback이나 시작 연결 확인을 업무 트랜잭션 건수에 섞지 않습니다.
+
+라벨은 고정된 `role=primary`와 필요한 제한된 결과 값만 사용합니다. DB URL·SQL·입력값·Session ID·
+멱등 키·예외 메시지는 노출하지 않습니다. 계측 실패가 DB 결과를 바꾸지 않도록 격리하고,
+기존 `/metrics` 실패 정책에 연결해 누락을 정상 수치로 공개하지 않습니다.
+DB 미설정 앱은 DB 지표를 노출하지 않으며, DB 활성 앱의 유휴 gauge는 0으로 노출합니다.
+
+파일 책임: `core/database.py`는 Engine과 listener 연결, `core/database_metrics.py`는 DB 지표 정의·기록,
+`core/metrics.py`는 기존 registry 공유에 필요한 최소 조정, `bootstrap/`는 앱별 조립·정리,
+`dependencies/database.py`는 Session 수명 계측을 소유합니다. 업무 트랜잭션 계측은 서비스 경계에 둡니다.
+테스트는 `tests/core/`, `tests/dependencies/`, 기존 lifespan·metrics 시험에 배치합니다.
+
+```mermaid
+flowchart LR
+    ENGINE["Engine · 연결 점유/반환"] --> DBM["DB metrics · 앱별 registry"]
+    DEP["Session 제공자 · 생성/정리"] --> DBM
+    WORK["업무 · 연결 획득/트랜잭션 결과"] --> DBM
+    DBM --> ENDPOINT["기존 /metrics"]
+    ENDPOINT --> PROM["로컬 Prometheus"]
+    PROM --> GRAFANA["DB 대시보드"]
+```
+
+`infra/monitoring/grafana/dashboards/db-overview.json`에 점유/상한·Session 수·점유/획득 지연·
+pool timeout·업무 결과/지연을 표시합니다. 기존 provisioning과 Compose를 재사용합니다.
+수집 단절·DB 미설정·관측 표본 없음은 정상 0과 구분하고, 인스턴스별 pool 상한과 전체 합산을 구분합니다.
+실행 순서와 장애 주입의 완료 기준은 [Task 6 실행 단위](fastapi-tasks.md#다음-실행-단위)가 소유합니다.
+
+근거 확인(2026-09-08): [SQLAlchemy PoolEvents](https://docs.sqlalchemy.org/en/20/core/events.html#sqlalchemy.events.PoolEvents),
+[asyncio event 연결](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#using-events-with-the-asyncio-extension).
+
 ## 확인할 사항
 
 후속 `postgres-integration`은 foundation 위에 pool/session·트랜잭션·migration·실제 격리 DB 시험을 추가하는
