@@ -40,6 +40,44 @@ Any·타입 예외는 외부 경계 등 필요한 곳에 이유를 남깁니다.
 
 ### 자원 수명
 
+#### 앱 조립 차용안
+
+Status: 사용자 지정 Thready 참조 구현 검토 · 적용안 논의 중 · 2026-09-07
+
+참조 구현의 `main.py`·`core/app_builder.py`·`core/lifespan.py`를 읽고,
+앱 구성 항목을 모으는 책임과 실행 자원의 시작·종료 책임을 구분하는 방식을 검토했습니다.
+참조 저장소의 본문·업무 기능을 이관하지 않고 이 템플릿의 계약을 기준으로 아래 적용안을 제안합니다.
+
+| 참조 구현의 방식 | 이 템플릿의 적용 제안 |
+| --- | --- |
+| Builder에서 앱 구성 항목을 모아 등록 | 기존 `create_app(settings, *, clock=...)`를 조립 지점으로 유지합니다. |
+| Container 생성·앱 연결 | 합의한 B안의 명시적 인자와 `dependencies.py`를 유지합니다. |
+| 미들웨어·예외 처리·라우터 등록을 구분 | 필요한 기능을 구현할 때 해당 등록을 조립 지점에서 명시합니다. 커질 때만 작은 함수로 분리합니다. |
+| 별도 lifespan에서 시작·종료 | 자원 수명과 readiness를 lifespan에서 관리합니다. logging의 프로세스 설정은 `run.py`가 소유합니다. |
+| 제품의 DB·scheduler·외부 client 초기화 | 실제 기능 도입 단계에서 필요한 자원만 연결합니다. |
+
+```mermaid
+flowchart TD
+    RUN["run.py · Settings 검증 · 프로세스 설정"] --> FACTORY["app.py · create_app"]
+    FACTORY --> APP["FastAPI · 앱별 값 · lifespan 연결"]
+    APP --> REGISTER["필요한 middleware · handler · router 등록"]
+    REGISTER --> SERVER["Uvicorn 실행"]
+    SERVER --> START["lifespan 시작 · 필요한 자원 준비"]
+    START --> READY["readiness 활성화 · 요청 처리"]
+    READY --> STOP["서버 drain · lifespan 종료 · 자원 해제"]
+    START -. "준비 실패" .-> CLEAN["이미 획득한 자원 정리 · 시작 실패"]
+```
+
+등록 단계의 표시는 요청 처리 순서가 아닙니다. 실제 미들웨어 순서는 관측·오류 처리 도입 시
+프레임워크 실행 경계를 확인하고 시험합니다. 아직 필요 없는 등록 함수·hook 목록·Builder는 생성하지 않습니다.
+
+참조 코드에서는 일부 초기화가 `yield`를 감싼 `try/finally`보다 먼저 실행됩니다.
+우리 계약은 부분 초기화 실패에서도 이미 획득한 자원을 정리해야 하므로, 실제 자원 획득 직후
+정리를 등록하는 방식으로 구현·검증합니다. 이 관찰은 참조 서비스의 운영 장애를 재현했다는 뜻은 아닙니다.
+
+이번 적용안의 다음 구현 단위는 `lifespan`과 liveness/readiness입니다.
+정상 시작·종료, 준비 전 상태, 부분 초기화 실패 정리를 시험하며 DB·scheduler는 아직 연결하지 않습니다.
+
 ```mermaid
 flowchart TD
     ENTRY["run · Settings 검증"] --> LOG["프로세스 logging 1회 설정"]
