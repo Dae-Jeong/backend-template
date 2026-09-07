@@ -126,12 +126,41 @@ curl -fsS 'http://127.0.0.1:18080/v1/greetings?name=Marin'
 curl -fsS http://127.0.0.1:18080/metrics
 ```
 
-Prometheus 텍스트 형식이며 Swagger는 조회 도구입니다. 시계열 저장·차트 서버는 설치하지 않았습니다.
+Prometheus 텍스트 형식이며 Swagger는 조회 도구입니다. 시계열 저장·차트는 아래 선택 확장으로 실행합니다.
 라벨·지연·실패 정책은 [관측 매핑](../../design/implementations/fastapi.md#로깅과-metrics-매핑)이 소유합니다.
 health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니다. 현재 단일 worker·앱별 메모리 registry로,
 재시작하면 초기화됩니다. CPU/RSS collector와 다중 worker 집계는 아직 연결하지 않았습니다.
 `/metrics`는 API와 같은 listener를 쓰며 기본 loopback입니다. 별도 인증·접근 제한은 없으므로
 외부 배포 시 내부 접근 정책을 구성해야 합니다.
+
+## 로컬 모니터링
+
+기본 Compose에 선택 파일을 더하면 Prometheus와 Grafana가 실행됩니다.
+이 디렉터리에서 실행하며 13000·19090 포트가 비어 있는지 먼저 확인합니다.
+
+```sh
+docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml up --wait --wait-timeout 90
+docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
+```
+
+- [Grafana 대시보드](http://127.0.0.1:13000/d/backend-http-local): 로그인 없이 읽기 전용으로 조회합니다.
+- [Prometheus 수집 대상](http://127.0.0.1:19090/targets): `fastapi`의 수집 성공 여부를 확인합니다.
+- [컨테이너 Swagger](http://127.0.0.1:18081/docs)에서 인사 API를 호출하면 지표가 쌓입니다. 18080의 별도 uv 서버는 수집 대상이 아닙니다.
+
+수집·화면 갱신은 5초 간격입니다. 요청량·지연 계산에는 최소 두 수집 표본이 필요합니다.
+시작 직후나 요청이 없는 구간의 비율·p95는 값이 없을 수 있습니다.
+수집 실패는 DOWN, 그래프는 해당 구간을 비워 표시하며 과거 표본은 유지합니다.
+데이터 소스와 대시보드는 `../../infra/monitoring/`의 provisioning 파일이 자동 등록합니다.
+
+모니터링만 중지하려면 다음 명령을 실행합니다. named volume의 데이터는 유지합니다.
+
+```sh
+docker compose --env-file .env.example -f compose.yaml -f monitoring.local.yml stop grafana prometheus
+```
+
+모든 게시 포트는 loopback이며 이 익명 Viewer 설정은 로컬 전용입니다.
+보관·자원 예산과 검증 한계는 [모니터링 설계](../../design/implementations/fastapi.md#로컬-모니터링)가 소유합니다.
+stg·prd는 Sentry 연동 방향만 정했으며 현재 SDK·DSN 연결은 없습니다.
 
 ## Logging 확인
 
@@ -198,7 +227,7 @@ uv tool run --from uv==0.12.10 uv run --locked ty check
 uv tool run --from uv==0.12.10 uv run --locked pytest -q
 ```
 
-`dist/`에 wheel과 소스 배포본을 생성합니다. 빌드는 Python 패키징이며 Docker 이미지 빌드는 후속입니다.
+`dist/`에 wheel과 소스 배포본을 생성합니다. 이 명령은 Python 패키징이며 Docker 이미지 빌드는 위 컨테이너 실행 절차에서 수행합니다.
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.

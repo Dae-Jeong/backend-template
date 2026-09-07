@@ -26,6 +26,7 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 5 | 구조화 로그 · 로컬 완료 | 표준 logging, JSON·허용 필드, 요청 ID·ContextVar·실패 격리·실제 Uvicorn 오류 중복 방지 검증 | 4 |
 | 6 | 응답 계약 · 기반 완료 | 성공 data·Problem Details, 422/404/405/500·공개 코드·요청 ID·원문 제외·Swagger 일치 검증. 업무 오류는 기능 도입 시 추가 | 2·4 |
 | 7 | 컨테이너 실행 · 로컬 완료 | 단일 API 빌드·healthy·응답/관측·UID 10001·env/dev 제외·자원/로그 상한 설정·유휴 종료·재기동 검증 | 4 |
+| 7 보완 | 로컬 모니터링 · 완료 | Prometheus·Grafana 선택 Compose, 자동 대시보드, 요청 집계·수집 단절·복구 검증 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
 | 9 | DB 통합 | DB·driver·저장 도구 선택, 격리 DB 대상, migration, pool 예산·timeout·트랜잭션 소유권 | 6 |
 | 10 | 동시성 보호 | DB 제약·조건부 변경・잠금 중 필요한 방식, 독립 연결 경합에서 초과 예약 방지 | 7 |
@@ -34,7 +35,8 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 환경변수는 각 기능을 도입할 때 필요한 항목만 `.env.example`에 추가합니다.
 DB·컨테이너 실행 대상과 실제 변경 범위는 해당 단계에서 확인합니다.
 CI 자동 실행은 로컬 검증 명령이 안정된 뒤 별도로 논의합니다.
-Sentry·Elastic·Replica·샤딩·LB·Gateway·캐시·브로커는 현재 설정 목록에 포함하지 않습니다.
+stg·prd는 Sentry 연동 방향만 합의했으며 SDK·DSN·운영 환경 설정은 후속 task에서 구체화합니다.
+Elastic·Replica·샤딩·LB·Gateway·캐시·브로커는 현재 설정 목록에 포함하지 않습니다.
 
 ```mermaid
 flowchart TD
@@ -44,7 +46,8 @@ flowchart TD
     METRICS --> LOG["구조화 로그"]
     LOG --> ERROR["오류 응답 계약"]
     ERROR --> CONTAINER["단일 API 컨테이너"]
-    CONTAINER --> CONTRACT["예약 계약"]
+    CONTAINER --> MONITOR["로컬 모니터링"]
+    MONITOR --> CONTRACT["예약 계약"]
     CONTRACT --> DB["단일 Primary 통합"]
     DB --> CONCURRENCY["동시성 보호"]
     CONCURRENCY --> IDEMPOTENCY["멱등 처리 · 복구"]
@@ -114,7 +117,7 @@ Settings와 실행 진입점, lifespan, 생존·준비 상태를 구현합니다
 Metrics 진행: `uv add prometheus-client`로 의존성을 추가하고 앱별 registry·순수 ASGI 관측·`/metrics`를 연결했습니다.
 정상·422·404·500·전송 실패·취소·background 오류·동시 요청·관측 실패 격리를 포함해 전체 33개 테스트가 통과했습니다.
 계측 실패는 업무 응답·원래 예외를 보존하고 `/metrics`의 503으로 드러냅니다.
-외부 수집 서버·CPU/RSS collector·다중 worker 집계는 미구현입니다.
+CPU/RSS collector·다중 worker 집계는 미구현입니다. 로컬 수집 서버는 아래 보완 작업에서 추가했습니다.
 Metrics 보완: enum 상태·불변 결과 계약·숫자 status와 지표 기록 경계를 분리했습니다.
 문서 조회 제외·동적 route template·405 집계 회귀 검증을 포함해 전체 34개 테스트가 통과했습니다.
 로컬 `/metrics` 선택이 전체 언어·환경의 전달 방식을 고정하지 않습니다.
@@ -127,8 +130,12 @@ INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_EN
 컨테이너 진행: docker init 생성 후 uv lock·멀티 스테이지·비 root·readiness·loopback 게시를 적용했습니다.
 linux/arm64 실제 빌드·healthy·200/422·Swagger/metrics/JSON 로그·UID/dev/env 제외와 자원/로그 보관 설정을 확인했습니다.
 SIGTERM 종료 로그·OOM=false·exit 143과 재기동 healthy를 확인했습니다. 컨테이너 내 진행 요청 drain·부하·amd64·실제 로그 회전은 미검증입니다.
+모니터링 보완: 선택 Compose에 Prometheus·Grafana를 추가하고 공식 file provisioning으로 대시보드를 등록했습니다.
+실행 조합은 `python/fastapi/monitoring.local.yml`, 수집기·대시보드 설정은 `infra/monitoring/`으로 구분했습니다.
+promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.
+설정과 검증 한계는 [로컬 모니터링](fastapi.md#로컬-모니터링)이 소유합니다.
 Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 검증 명세의 모든 항목 완료를 뜻하지 않습니다.
-다음은 Task 5 예약 계약 합의입니다. 실제 업무 충돌 코드·queue·외부 수집은 후속입니다.
+다음은 Task 5 예약 계약 합의입니다. 실제 업무 충돌 코드·queue·운영 수집·로그 검색은 후속입니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.

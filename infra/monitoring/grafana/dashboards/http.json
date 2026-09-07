@@ -1,0 +1,294 @@
+{
+  "uid": "backend-http-local",
+  "title": "Backend Template · Local HTTP",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Metrics 수집 상태",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"fastapi\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "No data",
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "description": "API 전체 건강이 아닌 /metrics 수집 성공 여부입니다."
+    },
+    {
+      "id": 2,
+      "title": "요청량",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "legendFormat": "요청량",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "No data",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다."
+    },
+    {
+      "id": 3,
+      "title": "5xx 비율",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((sum(rate(http_requests_total{job=\"fastapi\",status=~\"5..\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])))) / sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval]))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "legendFormat": "5xx 비율",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No data",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다. 요청이 없으면 비율을 계산하지 않습니다. 4xx는 분자에서 제외합니다."
+    },
+    {
+      "id": 4,
+      "title": "응답 지연 p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"fastapi\",completion=\"complete\"}[$__rate_interval]))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "legendFormat": "응답 지연 p95",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다. 마지막 응답 body 송신까지의 완료 요청 지연이며 histogram bucket에서 p95를 추정합니다."
+    },
+    {
+      "id": 5,
+      "title": "상태별 요청량",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "legendFormat": "{{status}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "No data",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다."
+    },
+    {
+      "id": 6,
+      "title": "실행 실패 건수 / 초",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(http_requests_total{job=\"fastapi\",execution!=\"returned\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "legendFormat": "실행 실패 건수 / 초",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "No data",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다. 취소·실행 예외를 세며 HTTP 5xx 비율과 별개입니다."
+    }
+  ]
+}

@@ -21,7 +21,11 @@ flowchart TB
     COLLECT -.-> STORE["Elasticsearch 등 · 저장과 검색"]
 ```
 
-외부 모니터링 연결은 후속 작업입니다. Sentry SDK·DSN·검색 서버 SDK·직접 전송 코드를 기본 제공하지 않습니다.
+환경별 선택은 로컬 Prometheus·Grafana, stg·prd Sentry 연동 방향으로 합의했습니다.
+로컬 구현·검증 범위는 [FastAPI 모니터링](implementations/fastapi.md#로컬-모니터링)이 소유합니다.
+stg·prd의 Sentry SDK·DSN·샘플링·민감정보 제외·오류 중복 처리는 후속 작업입니다.
+Sentry 선택만으로 운영 metrics 보관·대시보드·경보 구성이 완료된 것으로 보지 않습니다.
+검색 서버 SDK·직접 전송 코드는 기본 제공하지 않습니다.
 수집 연동을 구현할 때는 선택한 언어·실행 환경·수집 대상에 맞는 공식 또는 표준 라이브러리·SDK·exporter가 있으면 사용합니다.
 라이브러리가 제공하는 수집·직렬화·전송·재시도 기능을 자체 코드로 다시 만들지 않습니다.
 호환성과 관측 계약의 충족 여부를 확인하고, 지원하지 않는 부분만 이유·범위를 정해 보완합니다.

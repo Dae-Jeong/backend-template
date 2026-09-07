@@ -119,6 +119,24 @@ feature의 업무 이벤트·정책은 공통 로깅 기반을 사용하더라�
 
 DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.
 Dockerfile·Compose·빌드 context 허용 목록은 `python/fastapi/`에서 관리하며 단일 API 컨테이너를 구현했습니다.
+로컬 관측 실행 조합은 `python/fastapi/monitoring.local.yml`, 수집기 설정은 저장소 루트의 `infra/monitoring/`에 둡니다.
+앱 실행에 종속된 이미지·포트·자원·volume 연결과 언어 밖의 수집·대시보드 설정을 구분합니다.
+공통 설정은 현재 FastAPI의 지표 계약으로 검증했으며 다른 구현에서 재사용할 때 지표 이름·라벨 호환성을 확인합니다.
+
+```mermaid
+flowchart TD
+    ROOT["저장소 루트"] --> APP["python/fastapi/"]
+    APP --> BASE["compose.yaml · API 실행"]
+    APP --> LOCAL["monitoring.local.yml · 로컬 관측 실행 조합"]
+    ROOT --> INFRA["infra/monitoring/"]
+    INFRA --> PROM["prometheus/prometheus.yml · 수집 대상"]
+    INFRA --> GRAFANA["grafana/ · provisioning · dashboards"]
+    LOCAL -->|"읽기 전용 mount"| PROM
+    LOCAL -->|"읽기 전용 mount"| GRAFANA
+```
+
+Compose는 첫 번째 파일인 `python/fastapi/compose.yaml`을 기준으로 상대 경로를 해석합니다.
+따라서 실행 순서를 유지하며 구체적인 명령은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)를 따릅니다.
 Java/Spring Boot·TypeScript/Nest에는 각 언어와 프레임워크에 맞는 별도 배치를 정합니다.
 
 ## 소비 프로젝트에서 바꿀 수 있는 부분

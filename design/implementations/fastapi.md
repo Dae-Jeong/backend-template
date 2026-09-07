@@ -232,7 +232,7 @@ health·metrics와 기본 문서 경로(`/docs`, `/docs/oauth2-redirect`, `/open
 이 상태는 앱 재생성 전까지 유지하며 누락된 registry를 정상으로 공개하지 않습니다.
 업무 응답·원래 예외는 유지합니다. 현재 단일 worker 메모리 집계이며 재시작 시 초기화됩니다.
 CPU/RSS process collector는 아직 연결하지 않았으며 OOM·재시작은 컨테이너 관측 책임입니다.
-시계열 수집기·저장·경보·HPA·프로파일링·분산 trace는 포함하지 않습니다.
+시계열 수집·저장은 아래 로컬 모니터링 선택 확장으로 제공합니다. 경보·HPA·프로파일링·분산 trace는 포함하지 않습니다.
 
 ## 요청 종료와 취소
 
@@ -297,6 +297,47 @@ Docker Desktop에서 이미지 빌드·healthy·200/422 응답·Swagger·metrics
 
 참고(2026-09-07): [uv Docker 통합](https://docs.astral.sh/uv/guides/integration/docker/),
 [Compose 서비스 설정](https://docs.docker.com/reference/compose-file/services/).
+
+## 로컬 모니터링
+
+Status: Prometheus·Grafana 선택 확장 구현·로컬 검증 · 2026-09-07
+
+[monitoring.local.yml](../../python/fastapi/monitoring.local.yml)을 기본 Compose와 함께 실행합니다.
+버전·digest·보관·자원 설정은 이 파일, 수집 대상과 대시보드는
+[infra/monitoring/](../../infra/monitoring/), 실행 명령은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)가 소유합니다.
+공식 Prometheus 설정과 Grafana file provisioning을 사용하며 앱에 별도 전송 코드를 추가하지 않습니다.
+
+```mermaid
+flowchart LR
+    HTTP["HTTP 요청 결과"] --> METRIC["앱별 counter · histogram"]
+    METRIC --> ENDPOINT["GET /metrics"]
+    ENDPOINT -->|"5초마다 수집"| TSDB["Prometheus · 시계열 저장"]
+    TSDB -->|"PromQL 조회"| PANEL["Grafana · 요청량 · 오류 · p95"]
+    ENDPOINT -->|"수집 성공 / 실패"| UP["up 지표"]
+    UP --> PANEL
+```
+
+단일 API 컨테이너의 HTTP 지표를 수집합니다. 데이터 소스와 대시보드는 기동 시 자동 등록하며,
+로컬 loopback에서 익명 Viewer로 조회합니다. 관리자 계정·외부 계정·Sentry SDK를 생성하지 않습니다.
+Prometheus 보관은 24시간·256MB 중 먼저 도달하는 조건을 사용하며 named volume에 유지합니다.
+용량 설정은 TSDB 블록 보관 기준으로 WAL·head·파일시스템까지 포함한 디스크 hard limit이 아닙니다.
+각 관측 컨테이너는 CPU 0.5개·메모리 512MiB, Docker 로그 10MiB × 3개 설정을 갖습니다.
+
+대시보드는 수집 상태·초당 요청량·5xx 비율·완료 요청 p95·상태별 요청량·초당 실행 실패를 표시합니다.
+5xx와 실행 실패는 별개이며 4xx는 5xx 비율 분자에서 제외합니다.
+p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저표본에서는 정밀한 실측 percentile로 해석하지 않습니다.
+수집 상태는 instant query로 조회합니다. 그래프는 수집 성공 구간만 계산하고 단절 구간은 비우며 과거 표본을 유지합니다.
+표본 부재·요청 0건에서 비율이나 p95를 정상 0으로 채우지 않습니다.
+
+검증: Compose healthy·promtool 설정 검사·Grafana provisioning과 데이터 소스 health·6개 PromQL 조회를 확인했습니다.
+200/422/404 요청 집계, API 중지 후 up=0과 나머지 instant query의 빈 결과, 재기동 healthy를 확인했습니다.
+실제 Grafana 화면의 DOWN·과거 그래프·표시 범위를 확인했습니다.
+이 smoke는 5xx/취소 주입·부하·보관 만료·디스크 포화·재해 복구 시험을 포함하지 않습니다.
+로그 검색·CPU/RSS 수집·경보는 미구현이며 stg·prd Sentry SDK 설정과 운영 metrics 선택은 후속입니다.
+
+참고(2026-09-07): [Prometheus 설치](https://prometheus.io/docs/prometheus/latest/installation/),
+[Grafana Docker](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/),
+[Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/).
 
 ## 확인할 사항
 
