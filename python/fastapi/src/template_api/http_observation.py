@@ -4,12 +4,39 @@ from time import perf_counter
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from template_api.core.contracts import HttpCompletion, HttpExecution, HttpRequestResult
 from template_api.core.metrics import HttpMetrics
 
-METHODS = frozenset(
-    {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+EXCLUDED_PATHS = frozenset(
+    {
+        "/metrics",
+        "/health/live",
+        "/health/ready",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/openapi.json",
+        "/redoc",
+    }
 )
-EXCLUDED_PATHS = frozenset({"/metrics", "/health/live", "/health/ready"})
+
+
+def resolve_completion(
+    *,
+    finished: float | None,
+    send_failed: bool,
+    disconnected: bool,
+    execution: HttpExecution,
+) -> HttpCompletion:
+    """전송 완료 사실을 후속 오류·취소보다 우선합니다."""
+    if finished is not None:
+        return HttpCompletion.COMPLETE
+    if send_failed:
+        return HttpCompletion.SEND_FAILED
+    if execution is HttpExecution.CANCELLED:
+        return HttpCompletion.CANCELLED
+    if disconnected:
+        return HttpCompletion.DISCONNECTED
+    return HttpCompletion.INCOMPLETE
 
 
 class HttpObservation:
@@ -33,10 +60,10 @@ class HttpObservation:
 
         started = self.timer()
         finished: float | None = None
-        status = "none"
+        status: int | None = None
         send_failed = False
         disconnected = False
-        execution = "returned"
+        execution = HttpExecution.RETURNED
 
         async def observed_send(message: Message) -> None:
             nonlocal finished, status, send_failed
@@ -47,7 +74,7 @@ class HttpObservation:
                 raise
             if message["type"] == "http.response.start":
                 code = message["status"]
-                status = str(code) if 100 <= code <= 599 else "none"
+                status = code if 100 <= code <= 599 else None
             elif message["type"] == "http.response.body" and not message.get(
                 "more_body", False
             ):
@@ -63,29 +90,25 @@ class HttpObservation:
         try:
             await self.app(scope, observed_receive, observed_send)
         except asyncio.CancelledError:
-            execution = "cancelled"
+            execution = HttpExecution.CANCELLED
             raise
         except Exception:
-            execution = "error"
+            execution = HttpExecution.ERROR
             raise
         finally:
-            if finished is not None:
-                completion = "complete"
-            elif send_failed:
-                completion = "send_failed"
-            elif execution == "cancelled":
-                completion = "cancelled"
-            elif disconnected:
-                completion = "disconnected"
-            else:
-                completion = "incomplete"
-            try:
-                method = scope["method"] if scope["method"] in METHODS else "OTHER"
-                route = getattr(scope.get("route"), "path", "unmatched")
-                labels = (method, route, status, completion, execution)
-                elapsed = (finished if finished is not None else self.timer()) - started
-                self.metrics.requests.labels(*labels).inc()
-                self.metrics.duration.labels(*labels).observe(max(0.0, elapsed))
-            except Exception:
-                # 누락된 계측을 정상으로 공개하지 않고 원래 응답·예외를 유지합니다.
-                self.metrics.failed = True
+            elapsed = (finished if finished is not None else self.timer()) - started
+            self.metrics.record(
+                HttpRequestResult(
+                    method=scope["method"],
+                    route=getattr(scope.get("route"), "path", "unmatched"),
+                    status=status,
+                    completion=resolve_completion(
+                        finished=finished,
+                        send_failed=send_failed,
+                        disconnected=disconnected,
+                        execution=execution,
+                    ),
+                    execution=execution,
+                    duration_seconds=max(0.0, elapsed),
+                )
+            )

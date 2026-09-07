@@ -123,6 +123,19 @@ FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일
 ## 로깅과 metrics 매핑
 
 Metrics는 구현했고 아래 구조화 로깅·문맥 주입은 후속 계약입니다.
+`core/contracts.py`의 `HttpCompletion`·`HttpExecution`은 StrEnum이며
+불변 `HttpRequestResult`가 관측 결과를 전달합니다. HTTP status는 내부에서 `int | None`으로
+보존하고 `HttpMetrics.record`에서만 Prometheus 문자열 라벨로 변환합니다.
+완료 판단은 `resolve_completion`, 전송 관측은 ASGI wrapper, 지표 기록·실패 격리는 registry 소유자가 담당합니다.
+
+```mermaid
+flowchart LR
+    ASGI["HttpObservation · 전송과 실행 관측"] --> RESULT["HttpRequestResult · enum · int 또는 None"]
+    POLICY["resolve_completion · 완료 판단"] --> RESULT
+    RESULT --> RECORD["HttpMetrics.record · 라벨 변환 · 실패 격리"]
+    RECORD --> REGISTRY["prometheus-client · registry"]
+```
+
 `prometheus-client` 0.26.0이 counter·histogram·registry·텍스트 직렬화를 담당합니다.
 [공식 client](https://prometheus.github.io/client_python/exporting/http/asgi/)를 사용하며
 `uv add prometheus-client`로 설치했습니다. FastAPI Instrumentator도 검토했지만 전송 완료와
@@ -146,7 +159,10 @@ background 작업은 별도 문맥·수명을 갖습니다. queue 도입 시 enq
 
 HTTP counter `http_requests_total`과 histogram `http_request_duration_seconds`를 제공합니다.
 앱별 registry를 사용하고 라벨은 제한된 method·route template·status·completion·execution입니다.
-status가 없으면 고정값 none을 쓰고 미일치 route는 unmatched로 합칩니다. health·metrics 요청은 제외합니다.
+status가 없으면 고정값 none을 쓰고 미일치 route는 unmatched로 합칩니다.
+health·metrics와 기본 문서 경로(`/docs`, `/docs/oauth2-redirect`, `/openapi.json`, `/redoc`)는 제외합니다.
+문서 라우트는 `scope["route"]`가 없는 Starlette Route여서 기존에는 정상 응답도 unmatched에 섞였습니다.
+제외 목록은 현재 앱 경로 기준이며 문서 URL 변경 시 함께 조정합니다.
 알려진 HTTP method 외 값은 OTHER로 합치며 원문 경로·query·사용자 입력을 라벨에 넣지 않습니다.
 지연 bucket(초)은 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5와 +Inf입니다.
 계측·직렬화 실패는 앱별 실패 상태를 남겨 이후 `/metrics`가 503을 반환합니다.

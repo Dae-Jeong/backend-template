@@ -51,6 +51,10 @@ def test_http_metrics_counts_exclusions_and_app_isolation() -> None:
         assert client.get("/test/error").status_code == 500
         assert client.get("/health/live").status_code == 200
         assert client.get("/health/ready").status_code == 200
+        assert client.get("/docs").status_code == 200
+        assert client.get("/openapi.json").status_code == 200
+        assert client.get("/redoc").status_code == 200
+        assert client.get("/docs/oauth2-redirect").status_code == 200
         first = client.get("/metrics")
         second = client.get("/metrics")
     assert first.status_code == 200
@@ -88,6 +92,31 @@ def test_http_metrics_counts_exclusions_and_app_isolation() -> None:
 
 def scope(method: str = "GET") -> Scope:
     return {"type": "http", "method": method, "path": "/test", "headers": []}
+
+
+def test_dynamic_route_uses_template_and_preserves_method_rejection() -> None:
+    app = create_app(Settings())
+
+    @app.get("/items/{item_id}")
+    def item(item_id: str) -> dict[str, str]:
+        return {"id": item_id}
+
+    metrics = cast(HttpMetrics, app.state.metrics)
+    with TestClient(HttpObservation(app, metrics)) as client:
+        assert client.get("/items/private-one").status_code == 200
+        assert client.get("/items/private-two").status_code == 200
+        assert client.post("/items/private-three").status_code == 405
+        exposition = client.get("/metrics").text
+    assert "private-" not in exposition
+    assert sample(metrics, "http_requests_total", labels(route="/items/{item_id}")) == 2
+    assert (
+        sample(
+            metrics,
+            "http_requests_total",
+            labels(route="/items/{item_id}", method="POST", status="405"),
+        )
+        == 1
+    )
 
 
 async def receive() -> Message:

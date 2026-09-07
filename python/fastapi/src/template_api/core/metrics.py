@@ -2,6 +2,12 @@ from dataclasses import dataclass
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
 
+from template_api.core.contracts import HttpRequestResult
+
+METHODS = frozenset(
+    {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+)
+
 
 @dataclass
 class HttpMetrics:
@@ -9,6 +15,22 @@ class HttpMetrics:
     requests: Counter
     duration: Histogram
     failed: bool = False
+
+    def record(self, result: HttpRequestResult) -> None:
+        """Prometheus 라벨 변환과 기록 실패 격리를 이 경계에서 처리합니다."""
+        try:
+            labels = {
+                "method": result.method if result.method in METHODS else "OTHER",
+                "route": result.route,
+                "status": str(result.status) if result.status is not None else "none",
+                "completion": result.completion.value,
+                "execution": result.execution.value,
+            }
+            self.requests.labels(**labels).inc()
+            self.duration.labels(**labels).observe(result.duration_seconds)
+        except Exception:
+            # 누락된 계측을 정상으로 공개하지 않고 원래 응답·예외를 유지합니다.
+            self.failed = True
 
 
 def create_metrics() -> HttpMetrics:

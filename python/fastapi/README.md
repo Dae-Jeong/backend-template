@@ -67,7 +67,7 @@ curl -fsS http://127.0.0.1:18080/metrics
 
 Prometheus 텍스트 형식이며 Swagger는 조회 도구입니다. 시계열 저장·차트 서버는 설치하지 않았습니다.
 라벨·지연·실패 정책은 [관측 매핑](../../design/implementations/fastapi.md#로깅과-metrics-매핑)이 소유합니다.
-health와 metrics 조회 자체는 집계하지 않습니다. 현재 단일 worker·앱별 메모리 registry로,
+health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니다. 현재 단일 worker·앱별 메모리 registry로,
 재시작하면 초기화됩니다. CPU/RSS collector와 다중 worker 집계는 아직 연결하지 않았습니다.
 `/metrics`는 API와 같은 listener를 쓰며 기본 loopback입니다. 별도 인증·접근 제한은 없으므로
 외부 배포 시 내부 접근 정책을 구성해야 합니다.
@@ -124,7 +124,7 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM·metrics 시험을 포함한 현재 전체 테스트는 33개가 통과했습니다.
+lifespan·health·SIGTERM·metrics 시험을 포함한 현재 전체 테스트는 34개가 통과했습니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
 실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
 외부 자원은 대역이며, 강제 종료·실제 DB·LB drain은 검증 범위 밖입니다.

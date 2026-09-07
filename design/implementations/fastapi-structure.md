@@ -48,7 +48,7 @@ flowchart TD
 | `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
 | `src/template_api/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
-| `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`을 소유합니다. |
+| `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`과 HTTP 관측 결과·상태 enum을 소유합니다. |
 | `src/template_api/core/clock.py` | UTC 시간 공급 구현을 제공합니다. |
 | `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
 | `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
