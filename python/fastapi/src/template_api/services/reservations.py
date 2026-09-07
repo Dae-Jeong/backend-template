@@ -7,27 +7,48 @@ from sqlalchemy.exc import OperationalError, TimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from template_api.contracts.database import TransactionOutcome
-from template_api.contracts.reservations import Reservation
+from template_api.contracts.reservations import Reservation, ReservationResult
 from template_api.core.contracts import Clock
 from template_api.core.database import acquire_primary_connection
 from template_api.core.database_metrics import DatabaseMetrics
 from template_api.exceptions.database import DatabaseBusy, DatabasePoolTimeout
-from template_api.repositories.reservations import decrease_stock, save_reservation
+from template_api.repositories.reservations import (
+    decrease_stock,
+    get_replay,
+    save_idempotency,
+    save_reservation,
+)
+
+
+async def reserve_once(
+    session: AsyncSession, product_id: str, key: str, clock: Clock
+) -> ReservationResult:
+    existing = await get_replay(session, key, product_id)
+    if existing is not None:
+        return ReservationResult(existing, replayed=True)
+    await decrease_stock(session, product_id)
+    reservation = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
+    await save_reservation(session, reservation)
+    await save_idempotency(session, key, reservation)
+    return ReservationResult(reservation, replayed=False)
 
 
 async def reserve(
-    *, session: AsyncSession, metrics: DatabaseMetrics, product_id: str, clock: Clock
-) -> Reservation:
+    *,
+    session: AsyncSession,
+    metrics: DatabaseMetrics,
+    product_id: str,
+    key: str,
+    clock: Clock,
+) -> ReservationResult:
     started = monotonic()
     outcome = TransactionOutcome.FAILED
     body_error: BaseException | None = None
     try:
         async with session.begin():
             try:
-                await acquire_primary_connection(session, metrics)
-                await decrease_stock(session, product_id)
-                result = Reservation(uuid4().hex, product_id, clock().astimezone(UTC))
-                await save_reservation(session, result)
+                await acquire_primary_connection(session, metrics, write=True)
+                result = await reserve_once(session, product_id, key, clock)
             except BaseException as error:
                 body_error = error
                 raise

@@ -250,11 +250,16 @@ flowchart LR
 연결했습니다. 순차 성공·품절·없는 상품·입력 거절·저장 후 강제 실패의 전체 rollback과 Problem 응답,
 OpenAPI를 확인했습니다. 이 단계의 API는 멱등성 연결 전이며 8-1에서 키 입력을 필수화합니다.
 
-### Task 6-1. Engine과 pool 계측
-
 Task 7 실행 결과(2026-09-08): 두 앱·독립 Engine에서 재고 1개에 2개/12개 HTTP 요청을 동시에
 보내 성공 1개·나머지 품절·재고 0·예약 1개를 확인했습니다. SQLite 쓰기 잠금 timeout과 pool
 timeout은 각각 503의 별도 코드/Retry-After로 반환하며 잠금/연결 반환 후 재시도가 성공합니다.
+
+8-1 실행 결과(2026-09-08): `Idempotency-Key` 필수 입력, 동일 입력의 201/본문 재생과 다른 입력의
+409 충돌을 구현했습니다. 키·입력·응답 snapshot은 차감·예약과 같은 트랜잭션에 저장합니다.
+SQLite 쓰기 업무는 `BEGIN IMMEDIATE` 후 키를 확인하며 같은 키 재전송은 재고를 다시 차감하지 않습니다.
+키 저장 후 실패의 전체 rollback·같은 키 재시도와 기존 경합 시험을 포함해 86개 테스트·Ruff·ty가 통과했습니다.
+
+### Task 6-1. Engine과 pool 계측
 
 Status: 완료 · 2026-09-08. SQLAlchemy 2.0.52·aiosqlite 0.22.1을 `uv add`로 추가했습니다.
 기존 포함 63개 테스트와 Ruff·ty 통과. 파일 DB rollback·pool 고갈/무효화/회복·앱 재시작/격리·

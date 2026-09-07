@@ -1,9 +1,15 @@
+from datetime import datetime
+
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from template_api.contracts.reservations import Product, Reservation
-from template_api.exceptions.reservations import ProductNotFound, SoldOut
-from template_api.models.reservations import products, reservations
+from template_api.exceptions.reservations import (
+    IdempotencyConflict,
+    ProductNotFound,
+    SoldOut,
+)
+from template_api.models.reservations import idempotency_keys, products, reservations
 
 
 async def get_product(session: AsyncSession, product_id: str) -> Product:
@@ -33,5 +39,42 @@ async def save_reservation(session: AsyncSession, reservation: Reservation) -> N
             id=reservation.reservation_id,
             product_id=reservation.product_id,
             created_at=reservation.created_at.isoformat(),
+        )
+    )
+
+
+async def get_replay(
+    session: AsyncSession, key: str, product_id: str
+) -> Reservation | None:
+    row = (
+        await session.execute(
+            select(idempotency_keys).where(idempotency_keys.c.key == key)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    if row.product_id != product_id:
+        raise IdempotencyConflict()
+    response = row.response
+    return Reservation(
+        response["reservation_id"],
+        response["product_id"],
+        datetime.fromisoformat(response["created_at"]),
+    )
+
+
+async def save_idempotency(
+    session: AsyncSession, key: str, reservation: Reservation
+) -> None:
+    await session.execute(
+        insert(idempotency_keys).values(
+            key=key,
+            product_id=reservation.product_id,
+            reservation_id=reservation.reservation_id,
+            response={
+                "reservation_id": reservation.reservation_id,
+                "product_id": reservation.product_id,
+                "created_at": reservation.created_at.isoformat(),
+            },
         )
     )

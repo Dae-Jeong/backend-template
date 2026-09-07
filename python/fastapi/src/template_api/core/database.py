@@ -41,7 +41,11 @@ def create_primary_engine(settings: Settings, metrics: DatabaseMetrics) -> Async
 
     @event.listens_for(engine.sync_engine, "begin")
     def begin(connection: Connection) -> None:
-        connection.exec_driver_sql("BEGIN")
+        connection.exec_driver_sql(
+            "BEGIN IMMEDIATE"
+            if connection.get_execution_options().get("sqlite_write")
+            else "BEGIN"
+        )
 
     @event.listens_for(engine.sync_engine, "checkout")
     def checkout(connection: Any, record: ConnectionPoolEntry, proxy: Any) -> None:
@@ -72,7 +76,7 @@ async def primary_session(
 
 
 async def acquire_primary_connection(
-    session: AsyncSession, metrics: DatabaseMetrics
+    session: AsyncSession, metrics: DatabaseMetrics, *, write: bool = False
 ) -> AsyncConnection:
     """Call once inside the outer business transaction, before its first SQL."""
     if not session.in_transaction():
@@ -82,7 +86,7 @@ async def acquire_primary_connection(
     started = monotonic()
     outcome = AcquisitionOutcome.FAILED
     try:
-        connection = await session.connection()
+        connection = await session.connection(execution_options={"sqlite_write": write})
         outcome = AcquisitionOutcome.ACQUIRED
         return connection
     except TimeoutError:

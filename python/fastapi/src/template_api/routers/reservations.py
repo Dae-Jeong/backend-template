@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Header, Response
 
 from template_api.dependencies.clock import ClockDep
 from template_api.dependencies.database import DatabaseMetricsDep, PrimarySessionDep
@@ -8,6 +10,15 @@ from template_api.schemas.responses import Problem, Success
 from template_api.services.reservations import reserve
 
 router = APIRouter(prefix="/v1/reservations", tags=["reservations"])
+IdempotencyKey = Annotated[
+    str,
+    Header(
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    ),
+]
 
 
 @router.post(
@@ -18,17 +29,25 @@ router = APIRouter(prefix="/v1/reservations", tags=["reservations"])
 )
 async def create_reservation(
     body: ReserveRequest,
+    response: Response,
+    idempotency_key: IdempotencyKey,
     session: PrimarySessionDep,
     metrics: DatabaseMetricsDep,
     clock: ClockDep,
 ) -> Success[ReservationData]:
     result = await reserve(
-        session=session, metrics=metrics, product_id=body.product_id, clock=clock
+        session=session,
+        metrics=metrics,
+        product_id=body.product_id,
+        key=idempotency_key,
+        clock=clock,
     )
+    response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
+    reservation = result.reservation
     return Success(
         data=ReservationData(
-            reservation_id=result.reservation_id,
-            product_id=result.product_id,
-            created_at=result.created_at,
+            reservation_id=reservation.reservation_id,
+            product_id=reservation.product_id,
+            created_at=reservation.created_at,
         )
     )
