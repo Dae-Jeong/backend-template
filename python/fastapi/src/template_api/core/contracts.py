@@ -28,3 +28,17 @@ class HttpRequestResult:
     completion: HttpCompletion
     execution: HttpExecution
     duration_seconds: float
+
+
+class EventOutcome(StrEnum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class LogContext:
+    service_name: str
+    service_version: str
+    environment: str
+    work_id: str | None = None

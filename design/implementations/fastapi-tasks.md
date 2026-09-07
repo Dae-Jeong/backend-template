@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1·2·3 및 HTTP metrics 완료 · 구조화 로그 다음 · 2026-09-07
+Status: Task 1·2·3 및 HTTP metrics·구조화 로그 완료 · 오류 응답 계약 다음 · 2026-09-07
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -23,7 +23,7 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 2 | API·DI 기본형 · 완료 | B안으로 인사 API·입력 검증·clock 주입·앱별 override 검증 | 2 |
 | 3 | 초기화·종료·health · 완료 | lifespan·health·실패/취소 정리·SIGTERM 요청 drain 검증 | 3 |
 | 4 | HTTP metrics · 로컬 완료 | prometheus-client, 요청 수·지연·결과, 제한된 라벨, 앱별 registry, 관측 실패·동시 요청 격리 검증 | 4 |
-| 5 | 구조화 로그 | 표준 logging 설정 1회, JSON·허용 필드, 요청 ID·ContextVar, 오류 중복 기록 방지 | 4 |
+| 5 | 구조화 로그 · 로컬 완료 | 표준 logging, JSON·허용 필드, 요청 ID·ContextVar·실패 격리·실제 Uvicorn 오류 중복 방지 검증 | 4 |
 | 6 | 오류 응답 계약 | 입력 거절·업무 오류·예상 밖 오류의 응답, 민감정보 제외, 응답 시작 후 오류·취소 보존 | 2·4 |
 | 7 | 컨테이너 실행 | 단일 API Dockerfile·Compose, lock 설치, 비 root, env 제외, 포트·자원·로그 보관 상한 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
@@ -114,10 +114,15 @@ Settings와 실행 진입점, lifespan, 생존·준비 상태를 구현합니다
 Metrics 진행: `uv add prometheus-client`로 의존성을 추가하고 앱별 registry·순수 ASGI 관측·`/metrics`를 연결했습니다.
 정상·422·404·500·전송 실패·취소·background 오류·동시 요청·관측 실패 격리를 포함해 전체 33개 테스트가 통과했습니다.
 계측 실패는 업무 응답·원래 예외를 보존하고 `/metrics`의 503으로 드러냅니다.
-다음은 구조화 로그입니다. 외부 수집 서버·CPU/RSS collector·다중 worker 집계·Compose는 미구현입니다.
+외부 수집 서버·CPU/RSS collector·다중 worker 집계·Compose는 미구현입니다.
 Metrics 보완: enum 상태·불변 결과 계약·숫자 status와 지표 기록 경계를 분리했습니다.
 문서 조회 제외·동적 route template·405 집계 회귀 검증을 포함해 전체 34개 테스트가 통과했습니다.
 로컬 `/metrics` 선택이 전체 언어·환경의 전달 방식을 고정하지 않습니다.
+Logging 진행: 표준 logging·json 기반 stdout 출력, 앱별 서비스 문맥·서버 생성 요청 ID,
+INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_ENVIRONMENT를 예시에 추가했습니다.
+형식·출력 실패의 안전한 stderr 보고, 동시 요청·취소·민감정보 제외·크기 상한을 포함해 전체 44개 테스트가 통과했습니다.
+실제 격리 서버에서 설정 두 번·500 오류 상세 1회·요약 연결·SIGTERM drain을 확인했습니다.
+다음은 오류 응답 계약이며 파일 rotation·queue·외부 수집은 후속입니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.

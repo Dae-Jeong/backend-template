@@ -122,7 +122,7 @@ FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일
 
 ## 로깅과 metrics 매핑
 
-Metrics는 구현했고 아래 구조화 로깅·문맥 주입은 후속 계약입니다.
+HTTP metrics·구조화 로깅·요청 문맥 주입을 구현했습니다.
 `core/contracts.py`의 `HttpCompletion`·`HttpExecution`은 StrEnum이며
 불변 `HttpRequestResult`가 관측 결과를 전달합니다. HTTP status는 내부에서 `int | None`으로
 보존하고 `HttpMetrics.record`에서만 Prometheus 문자열 라벨로 변환합니다.
@@ -141,21 +141,54 @@ flowchart LR
 `uv add prometheus-client`로 설치했습니다. FastAPI Instrumentator도 검토했지만 전송 완료와
 후속 실행 오류·취소를 구분하는 현재 계약을 직접 제공하지 않아 그 ASGI 경계만 구현했습니다.
 
-표준 `logging.getLogger(__name__)`와 info/warning/error를 사용합니다. 고정 메시지와 허용한 extra만 전달합니다.
-TypedDict는 작성 시 도움이며 런타임 검증은 formatter/filter가 별도로 수행합니다.
+표준 `logging.getLogger(__name__)`와 info/warning/error를 사용합니다.
+표준 라이브러리 `logging`이 수준·handler·출력을, `json.dumps`가 직렬화를 담당합니다.
+별도 패키지 설치는 없으며 자체 Logger API를 만들지 않습니다. formatter/filter는 프로젝트 필드 허용·정제만 담당합니다.
+고정 이벤트명과 enum `EventOutcome`, 불변 `HttpRequestResult`만 허용한 extra로 읽고 나머지는 제외합니다.
+새 업무 이벤트는 소유 기능이 의미를 정하고 허용 목록을 함께 갱신합니다.
 
 ```python
 logger.info(
     "greeting.completed",
-    extra={"event_action": "greeting.completed", "event_outcome": "success"},
+    extra={"event_outcome": EventOutcome.SUCCESS},
 )
 ```
 
-서비스 설정·작업 ID는 작업별 immutable ContextVar 문맥으로 주입합니다. finally에서 token을 복원합니다.
+`run.py`가 Settings 검증 후 앱 생성 전에 `configure_logging`을 호출합니다.
+`template_api`·`uvicorn` 각각에 소유 JSON handler 하나만 연결하고 반복 호출 시 재사용합니다.
+Uvicorn은 `log_config=None`, `access_log=False`로 실행합니다. 다른 도구 handler는 삭제하지 않으며
+별도로 붙인 handler의 출력은 이 formatter의 보호 범위 밖입니다.
+
+```mermaid
+flowchart LR
+    RUN["run.py · configure_logging"] --> HANDLER["표준 logging handler · 프로세스 소유"]
+    APP["앱별 LogContext"] --> REQUEST["요청 UUID · ContextVar"]
+    REQUEST --> SUMMARY["HTTP 요약 · 오류 상세"]
+    SUMMARY --> FILTER["허용 이벤트 · 타입 검사 · 정제"]
+    HANDLER --> FILTER
+    FILTER --> JSON["json.dumps · stdout 한 줄"]
+    JSON -. "출력 실패" .-> FALLBACK["고정 실패 JSON · stderr"]
+```
+
+서비스 설정·작업 ID는 불변 `LogContext`와 ContextVar로 주입합니다. finally에서 token을 복원합니다.
+작업 ID는 서버 UUID이며 `X-Request-ID` 응답 헤더와 `app.work.id`를 연결합니다.
+클라이언트의 동명 헤더를 재사용하지 않으며 멱등 키·trace ID로 해석하지 않습니다.
 동시 요청에 mutable dict를 공유하지 않습니다. 자식 task의 상속 문맥은 부모 reset으로 사라지지 않으므로
-background 작업은 별도 문맥·수명을 갖습니다. queue 도입 시 enqueue 전에 문맥을 복사합니다.
-로그는 UTF-8 16 KiB, 최대 20 stack frame을 초기 상한 후보로 둡니다. 선택 필드를 줄인 후 JSON을 다시 직렬화하고 잘림을 표시합니다.
-형식·출력 실패를 같은 logger로 재귀 보고하지 않습니다. 개인정보·예약 필드 충돌을 시험합니다.
+분리된 background 작업은 별도 문맥·수명이 필요합니다. queue·독립 Job 구현은 후속입니다.
+
+`http.completed` INFO 요약에는 숫자 status(미관측 null), enum 완료·실행 상태와 정수 ns 지연을 넣습니다.
+정상·입력 거절·취소 요약을 기록하며 WARNING 이상 설정에서는 INFO 요약이 출력되지 않습니다.
+예외는 `http.failed` ERROR 상세 1건으로 같은 작업 ID에 연결합니다. 오류 메시지·소스 줄·지역변수는 제외하고
+타입과 마지막 20개 프레임의 파일명·함수명·행만 기록합니다. health·문서·metrics는 정상 요약을 제외하되 예외는 기록합니다.
+Uvicorn의 알려진 ASGI 예외 로그는 traceback에 주입한 HTTP wrapper 코드 객체가 있을 때만 중복 제외합니다.
+이 연결은 고정 Uvicorn 버전의 실제 프로세스로 검증하며, 업그레이드 시 회귀 시험이 필요합니다.
+나머지 서버 로그는 고정 이벤트명과 수준으로 변환하며 알 수 없는 메시지는 `server.event`로 남기고 원문을 출력하지 않습니다.
+
+로그는 UTF-8 16 KiB, 최대 20 stack frame입니다. 문자열 필드별 상한을 적용하고 전체 상한 초과 시
+선택 오류 프레임을 제외한 후 JSON을 다시 직렬화해 `app.truncated=true`를 표시합니다.
+형식·출력 실패는 업무 응답을 유지하고 고정 `logging.output_failed` JSON을 stderr에 한 번 시도합니다.
+이를 같은 logger로 재귀 보고하지 않습니다. stdout·stderr가 모두 실패하면 보고를 보장할 수 없습니다.
+현재 동기 stdout이며 느린 출력·유실·보관 상한·외부 수집은 해결하지 않았습니다.
 
 HTTP counter `http_requests_total`과 histogram `http_request_duration_seconds`를 제공합니다.
 앱별 registry를 사용하고 라벨은 제한된 method·route template·status·completion·execution입니다.
@@ -173,9 +206,9 @@ CPU/RSS process collector는 아직 연결하지 않았으며 OOM·재시작은 
 
 ## 요청 종료와 취소
 
-완성된 FastAPI 오류 처리 경계 바깥의 순수 ASGI wrapper로 metrics를 관측합니다.
-`run.py`가 `HttpObservation(app, app.state.metrics)`를 Uvicorn에 전달합니다.
-아래 요약 로그·문맥 설정과 복원은 후속이며 현재 wrapper는 요청별 지역 변수로 계측 상태를 격리합니다.
+완성된 FastAPI 오류 처리 경계 바깥의 순수 ASGI wrapper로 metrics·로그를 관측합니다.
+`run.py`가 `HttpObservation(app, app.state.metrics, log_context=app.state.log_context)`를 Uvicorn에 전달합니다.
+wrapper는 요청별 지역 변수와 ContextVar로 계측 상태·로그 문맥을 격리합니다.
 내부 FastAPI 객체에서 DI override를 관리하고 wrapper는 설정·registry를 별도로 중복 소유하지 않습니다.
 HTTP 이외 scope는 그대로 위임하며 BaseHTTPMiddleware의 문맥 전달 제약에 의존하지 않습니다.
 

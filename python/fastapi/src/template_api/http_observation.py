@@ -1,11 +1,23 @@
 import asyncio
+import logging
 from collections.abc import Callable
+from dataclasses import replace
 from time import perf_counter
+from uuid import uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from template_api.core.contracts import HttpCompletion, HttpExecution, HttpRequestResult
+from template_api.core.contracts import (
+    EventOutcome,
+    HttpCompletion,
+    HttpExecution,
+    HttpRequestResult,
+    LogContext,
+)
+from template_api.core.logging import request_outcome, work_context
 from template_api.core.metrics import HttpMetrics
+
+logger = logging.getLogger(__name__)
 
 EXCLUDED_PATHS = frozenset(
     {
@@ -48,15 +60,23 @@ class HttpObservation:
         metrics: HttpMetrics,
         *,
         timer: Callable[[], float] = perf_counter,
+        log_context: LogContext | None = None,
     ) -> None:
         self.app = app
         self.metrics = metrics
         self.timer = timer
+        self.log_context = log_context
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] in EXCLUDED_PATHS:
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+
+        excluded = scope["path"] in EXCLUDED_PATHS
+        context = (
+            replace(self.log_context, work_id=uuid4().hex) if self.log_context else None
+        )
+        token = work_context.set(context)
 
         started = self.timer()
         finished: float | None = None
@@ -64,9 +84,21 @@ class HttpObservation:
         send_failed = False
         disconnected = False
         execution = HttpExecution.RETURNED
+        error: Exception | None = None
 
         async def observed_send(message: Message) -> None:
             nonlocal finished, status, send_failed
+            if (
+                message["type"] == "http.response.start"
+                and context is not None
+                and context.work_id is not None
+            ):
+                message = dict(message)
+                message["headers"] = [
+                    (key, value)
+                    for key, value in message.get("headers", [])
+                    if key.lower() != b"x-request-id"
+                ] + [(b"x-request-id", context.work_id.encode("ascii"))]
             try:
                 await send(message)
             except OSError:
@@ -92,13 +124,14 @@ class HttpObservation:
         except asyncio.CancelledError:
             execution = HttpExecution.CANCELLED
             raise
-        except Exception:
+        except Exception as caught:
             execution = HttpExecution.ERROR
+            error = caught
             raise
         finally:
-            elapsed = (finished if finished is not None else self.timer()) - started
-            self.metrics.record(
-                HttpRequestResult(
+            try:
+                elapsed = (finished if finished is not None else self.timer()) - started
+                result = HttpRequestResult(
                     method=scope["method"],
                     route=getattr(scope.get("route"), "path", "unmatched"),
                     status=status,
@@ -111,4 +144,23 @@ class HttpObservation:
                     execution=execution,
                     duration_seconds=max(0.0, elapsed),
                 )
-            )
+                if context is not None and error is not None:
+                    logger.error(
+                        "http.failed",
+                        exc_info=(type(error), error, error.__traceback__),
+                        extra={"event_outcome": EventOutcome.FAILURE},
+                    )
+                if not excluded:
+                    self.metrics.record(result)
+                    if context is not None:
+                        logger.info(
+                            "http.completed",
+                            extra={
+                                "http_result": result,
+                                "event_outcome": request_outcome(result),
+                            },
+                        )
+            except Exception:
+                self.metrics.failed = True
+            finally:
+                work_context.reset(token)

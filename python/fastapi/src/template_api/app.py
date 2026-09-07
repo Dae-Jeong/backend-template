@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from template_api.contracts import PrepareResources
 from template_api.core.clock import system_clock
-from template_api.core.contracts import Clock
+from template_api.core.contracts import Clock, LogContext
 from template_api.core.lifespan import (
     create_lifespan,
     prepare_resources,
@@ -32,6 +32,9 @@ def create_app(
     app.state.clock = clock
     app.state.ready = False
     app.state.metrics = create_metrics()
+    app.state.log_context = LogContext(
+        settings.app_name, settings.service_version, settings.app_environment
+    )
     app.get("/")(index)
     app.include_router(greetings_router)
     app.include_router(health_router)

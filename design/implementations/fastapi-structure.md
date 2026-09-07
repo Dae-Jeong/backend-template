@@ -48,7 +48,8 @@ flowchart TD
 | `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
 | `src/template_api/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
-| `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`과 HTTP 관측 결과·상태 enum을 소유합니다. |
+| `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`, HTTP 관측 결과·상태 enum과 불변 `LogContext`를 소유합니다. |
+| `src/template_api/core/logging.py` | 표준 logging 설정·허용 이벤트·JSON formatter·출력 실패 격리·ContextVar를 소유합니다. |
 | `src/template_api/core/clock.py` | UTC 시간 공급 구현을 제공합니다. |
 | `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
 | `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
@@ -61,6 +62,7 @@ flowchart TD
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
 | `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
 | `tests/test_metrics.py` | 실제 HTTP 계측과 제어된 ASGI 실패·취소·앱별 지표 분리를 검증합니다. |
+| `tests/test_logging.py` | JSON·개인정보 제외·요청 ID·문맥 격리·취소·전송 오류·출력 실패를 검증합니다. |
 | `tests/core/`, `tests/greetings/` | 책임별 검증을 묶습니다. 소스의 모든 파일·폴더와 일대일 대응을 강제하지 않습니다. |
 | `pyproject.toml`, `uv.lock`, `.python-version` | 패키지·개발 검사 기준·의존성 해석 결과·실행 Python 버전을 관리합니다. |
 | `.env.example` | 사용자가 복사할 환경 설정 예시입니다. 실제 `.env`는 Git에서 제외합니다. |
@@ -108,7 +110,7 @@ flowchart LR
 ## 공통 기반과 후속 배치
 
 공통 설정·시간·관측 기반처럼 여러 기능이 실제로 공유하는 책임만 `core/`에 둡니다.
-metrics 기반은 `core/metrics.py`이며 로깅 기반도 `core/` 내부 파일 후보입니다. HTTP 전용 관측 코드는 입력 경계에 배치합니다.
+metrics·로깅 기반은 `core/metrics.py`·`core/logging.py`입니다. HTTP 전용 관측 코드는 입력 경계에 배치합니다.
 feature의 업무 이벤트·정책은 공통 로깅 기반을 사용하더라도 feature가 소유합니다.
 
 DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.

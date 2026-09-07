@@ -1,12 +1,9 @@
 from dataclasses import dataclass
+from http import HTTPMethod
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
 
 from template_api.core.contracts import HttpRequestResult
-
-METHODS = frozenset(
-    {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
-)
 
 
 @dataclass
@@ -20,7 +17,7 @@ class HttpMetrics:
         """Prometheus 라벨 변환과 기록 실패 격리를 이 경계에서 처리합니다."""
         try:
             labels = {
-                "method": result.method if result.method in METHODS else "OTHER",
+                "method": result.method if result.method in HTTPMethod else "OTHER",
                 "route": result.route,
                 "status": str(result.status) if result.status is not None else "none",
                 "completion": result.completion.value,

@@ -20,8 +20,9 @@ flowchart TD
     BUILD --> DIST["dist/ · wheel와 소스 배포본"]
     ENV["환경변수 · .env · 기본값"] --> SETTINGS["Settings 검증"]
     RUN["python -m template_api.run"] --> SETTINGS
-    SETTINGS --> APP["create_app(settings)"]
-    APP --> OBS["HttpObservation · 앱별 metrics"]
+    SETTINGS --> LOG["configure_logging · 프로세스 설정"]
+    LOG --> APP["create_app(settings)"]
+    APP --> OBS["HttpObservation · metrics · 요청 로그"]
     OBS --> SERVER["Uvicorn · 단일 worker"]
 ```
 
@@ -47,8 +48,8 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 - `/health/live`: 생존 응답 200
 - `/health/ready`: 준비 완료 200, 미완료 503
 
-인사 API의 입력 검증·clock DI·lifespan·health·HTTP metrics까지 구현했습니다. 구조화 로그와
-기존 전체 검증 명세는 아직 구현·검증하지 않았습니다.
+인사 API의 입력 검증·clock DI·lifespan·health·HTTP metrics·구조화 로그를 구현했습니다.
+오류 응답 통일·컨테이너와 기존 전체 검증 명세는 아직 완료하지 않았습니다.
 
 ## Metrics 확인
 
@@ -71,6 +72,23 @@ health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니�
 재시작하면 초기화됩니다. CPU/RSS collector와 다중 worker 집계는 아직 연결하지 않았습니다.
 `/metrics`는 API와 같은 listener를 쓰며 기본 loopback입니다. 별도 인증·접근 제한은 없으므로
 외부 배포 시 내부 접근 정책을 구성해야 합니다.
+
+## Logging 확인
+
+실행 터미널 stdout에 JSON 한 줄로 출력합니다. [Swagger](http://127.0.0.1:18080/docs)에서
+인사 API를 호출하면 `http.completed` 요청 요약이 생깁니다. 응답 헤더 `X-Request-ID`와
+로그의 `app.work.id`가 같으므로 해당 요청을 찾을 수 있습니다.
+
+```sh
+curl -i 'http://127.0.0.1:18080/v1/greetings?name=Marin'
+```
+
+요약의 `http.response.status_code`는 숫자, `event.duration`은 정수 나노초입니다.
+오류 상세 `http.failed`는 같은 ID로 연결되며 예외 메시지·요청 입력 원문을 출력하지 않습니다.
+기본 문서·health·metrics의 정상 조회는 요약에서 제외합니다.
+표준 `logging`·`json`을 사용하므로 추가 패키지 설치는 없습니다.
+구조와 필드·허용 이벤트·실패 정책은 [로깅 설계와 Mermaid](../../design/implementations/fastapi.md#로깅과-metrics-매핑)가 소유합니다.
+외부 수집·검색·파일 rotation·queue는 미구현입니다. 동기 stdout이 느리면 요청 처리가 지연될 수 있습니다.
 
 ## 명시적 DI
 
@@ -99,15 +117,15 @@ clock은 timezone-aware UTC datetime을 반환하는 계약입니다.
 
 | 설정 | 역할 |
 | --- | --- |
-| `APP_NAME` | OpenAPI의 앱 이름 |
-| `SERVICE_VERSION` | OpenAPI의 서비스 버전; 패키지 빌드 버전과 별개 |
+| `APP_NAME` | OpenAPI와 로그의 서비스 이름 |
+| `SERVICE_VERSION` | OpenAPI와 로그의 서비스 버전; 패키지 빌드 버전과 별개 |
+| `APP_ENVIRONMENT` | 로그의 실행 환경 이름; 기본 local |
 | `SERVER_HOST` | 서버 바인딩 주소; 기본 loopback |
 | `SERVER_PORT` | 서버 포트; 1~65535 |
 | `SHUTDOWN_TIMEOUT_SECONDS` | 종료 시 진행 중 요청 대기 시간; 기본 15초, cleanup 전체 제한은 아님 |
-| `LOG_LEVEL` | Uvicorn 로그 수준; 소문자 사용 |
+| `LOG_LEVEL` | 앱·Uvicorn 로그 수준; 소문자 사용, INFO 요약을 보려면 info 또는 debug |
 
 설정은 시작 시 한 번 검증해 앱에 명시적으로 전달합니다. 잘못된 설정은 입력 원문을 출력하지 않고 종료합니다.
-로그 수준은 현재 Uvicorn에 적용되며 공통 구조화 로깅의 완성을 의미하지 않습니다.
 패키지 버전·의존성·Python 버전은 빌드 입력에 남기고 환경변수로 바꾸지 않습니다.
 
 ## 빌드와 검증
@@ -124,7 +142,9 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM·metrics 시험을 포함한 현재 전체 테스트는 34개가 통과했습니다.
+lifespan·health·SIGTERM·metrics·logging 시험을 포함한 현재 전체 테스트는 44개가 통과했습니다.
+로그는 요청별 ID·서비스 문맥 분리, 취소·전송 오류·원래 예외 보존, 민감정보 제외,
+크기 상한·JSON 형식·출력 실패와 실제 Uvicorn 오류 중복 방지를 검증합니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
 실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
 외부 자원은 대역이며, 강제 종료·실제 DB·LB drain은 검증 범위 밖입니다.
