@@ -1,4 +1,8 @@
+from functools import partial
+
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
 
 from template_api.contracts import PrepareResources
 from template_api.core.clock import system_clock
@@ -9,13 +13,21 @@ from template_api.core.lifespan import (
 )
 from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
+from template_api.errors import (
+    PROBLEM_RESPONSES,
+    http_error,
+    internal_error,
+    problem_openapi,
+    validation_error,
+)
 from template_api.greetings.api import router as greetings_router
 from template_api.health import router as health_router
 from template_api.metrics import router as metrics_router
+from template_api.schemas import MessageData, Success
 
 
-def index() -> dict[str, str]:
-    return {"message": "Hello, FastAPI!"}
+def index() -> Success[MessageData]:
+    return Success(data=MessageData(message="Hello, FastAPI!"))
 
 
 def create_app(
@@ -35,8 +47,13 @@ def create_app(
     app.state.log_context = LogContext(
         settings.app_name, settings.service_version, settings.app_environment
     )
-    app.get("/")(index)
+    app.add_exception_handler(RequestValidationError, validation_error)
+    app.add_exception_handler(HTTPException, http_error)
+    app.add_exception_handler(Exception, internal_error)
+    app.get("/", responses=PROBLEM_RESPONSES)(index)
     app.include_router(greetings_router)
     app.include_router(health_router)
     app.include_router(metrics_router)
+    # FastAPI가 지원하는 인스턴스별 OpenAPI 함수 교체입니다. self는 partial로 고정합니다.
+    app.openapi = partial(problem_openapi, app, app.openapi)  # ty: ignore[invalid-assignment]
     return app

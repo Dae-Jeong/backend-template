@@ -41,7 +41,7 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 
 실행 전 18080 포트 점유를 확인합니다. 종료는 실행 터미널에서 Ctrl+C입니다.
 
-- `GET /`: `{"message":"Hello, FastAPI!"}`
+- `GET /`: `{"data":{"message":"Hello, FastAPI!"}}`
 - `GET /v1/greetings?name=Marin`: 정규화된 이름의 인사와 UTC `generated_at`; 앞뒤 공백 제거 후 1~80자
 - `/docs`: Swagger UI
 - `/openapi.json`: OpenAPI 명세
@@ -49,7 +49,24 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 - `/health/ready`: 준비 완료 200, 미완료 503
 
 인사 API의 입력 검증·clock DI·lifespan·health·HTTP metrics·구조화 로그를 구현했습니다.
-오류 응답 통일·컨테이너와 기존 전체 검증 명세는 아직 완료하지 않았습니다.
+성공·오류 응답 계약도 적용했습니다. 컨테이너와 기존 전체 검증 명세는 아직 완료하지 않았습니다.
+
+## 응답 포맷
+
+업무 JSON 성공은 `data`에 담으며 인사 결과는 `data.message`·`data.generated_at`으로 읽습니다.
+오류는 실제 HTTP 상태와 `application/problem+json`으로 반환합니다.
+`code`는 enum 기반 공개 코드이고 `request_id`는 응답의 `X-Request-ID`와 같습니다.
+422는 공개 필드 위치·오류 코드만 제공하며 500은 INTERNAL_ERROR로 원문을 숨깁니다.
+health·metrics·문서는 기존 형식을 유지합니다.
+
+```sh
+curl -i 'http://127.0.0.1:18080/v1/greetings?name=Marin'
+curl -i http://127.0.0.1:18080/v1/greetings
+```
+
+첫 요청은 200의 data, 두 번째는 422의 INVALID_INPUT·REQUIRED를 반환합니다.
+[공통 응답 계약과 Mermaid](../../design/backend.md#http-응답-계약),
+[FastAPI 오류 처리](../../design/implementations/fastapi.md#http-응답-포맷)에서 정확한 필드와 범위를 확인합니다.
 
 ## Metrics 확인
 
@@ -142,7 +159,7 @@ uv tool run --from uv==0.12.10 uv run --locked pytest -q
 의존성 고정은 `uv.lock`과 `uv sync --locked`가 담당하며 wheel만으로 의존성 전체가 고정되지는 않습니다.
 빌드 산출물에 `.env`·가상환경이 없음을 확인했습니다.
 설정 우선순위·앱별 설정 분리·잘못된 설정의 안전한 시작 실패 테스트 3개가 통과했습니다.
-lifespan·health·SIGTERM·metrics·logging 시험을 포함한 현재 전체 테스트는 44개가 통과했습니다.
+lifespan·health·SIGTERM·metrics·logging·응답 계약 시험을 포함한 현재 전체 테스트는 53개가 통과했습니다.
 로그는 요청별 ID·서비스 문맥 분리, 취소·전송 오류·원래 예외 보존, 민감정보 제외,
 크기 상한·JSON 형식·출력 실패와 실제 Uvicorn 오류 중복 방지를 검증합니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.

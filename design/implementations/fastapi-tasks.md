@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1·2·3 및 HTTP metrics·구조화 로그 완료 · 오류 응답 계약 다음 · 2026-09-07
+Status: Task 1·2·3 및 HTTP metrics·로그·응답 계약 완료 · 컨테이너 범위 논의 후속 · 2026-09-07
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -24,7 +24,7 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 3 | 초기화·종료·health · 완료 | lifespan·health·실패/취소 정리·SIGTERM 요청 drain 검증 | 3 |
 | 4 | HTTP metrics · 로컬 완료 | prometheus-client, 요청 수·지연·결과, 제한된 라벨, 앱별 registry, 관측 실패·동시 요청 격리 검증 | 4 |
 | 5 | 구조화 로그 · 로컬 완료 | 표준 logging, JSON·허용 필드, 요청 ID·ContextVar·실패 격리·실제 Uvicorn 오류 중복 방지 검증 | 4 |
-| 6 | 오류 응답 계약 | 입력 거절·업무 오류·예상 밖 오류의 응답, 민감정보 제외, 응답 시작 후 오류·취소 보존 | 2·4 |
+| 6 | 응답 계약 · 기반 완료 | 성공 data·Problem Details, 422/404/405/500·공개 코드·요청 ID·원문 제외·Swagger 일치 검증. 업무 오류는 기능 도입 시 추가 | 2·4 |
 | 7 | 컨테이너 실행 | 단일 API Dockerfile·Compose, lock 설치, 비 root, env 제외, 포트·자원·로그 보관 상한 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
 | 9 | DB 통합 | DB·driver·저장 도구 선택, 격리 DB 대상, migration, pool 예산·timeout·트랜잭션 소유권 | 6 |
@@ -122,7 +122,9 @@ Logging 진행: 표준 logging·json 기반 stdout 출력, 앱별 서비스 문�
 INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_ENVIRONMENT를 예시에 추가했습니다.
 형식·출력 실패의 안전한 stderr 보고, 동시 요청·취소·민감정보 제외·크기 상한을 포함해 전체 44개 테스트가 통과했습니다.
 실제 격리 서버에서 설정 두 번·500 오류 상세 1회·요약 연결·SIGTERM drain을 확인했습니다.
-다음은 오류 응답 계약이며 파일 rotation·queue·외부 수집은 후속입니다.
+응답 계약 진행: 성공 data·Problem Details를 합의하고 내부 업무 타입과 외부 스키마를 분리했습니다.
+전체 53개 테스트·lint·타입 검사로 기본 오류·요청 ID·Swagger·헤더 보존·stream 오류 회귀를 확인했습니다.
+다음은 컨테이너 실행 범위 논의입니다. 실제 업무 충돌 코드·파일 rotation·queue·외부 수집은 후속입니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.

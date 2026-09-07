@@ -30,8 +30,10 @@ def test_greeting_normalizes_input(name: str) -> None:
         response = client.get("/v1/greetings", params={"name": name})
     assert response.status_code == 200
     assert response.json() == {
-        "message": f"Hello, {name.strip()}!",
-        "generated_at": "2026-09-07T00:00:00Z",
+        "data": {
+            "message": f"Hello, {name.strip()}!",
+            "generated_at": "2026-09-07T00:00:00Z",
+        }
     }
 
 
@@ -65,14 +67,19 @@ def test_override_is_app_local_and_restorable() -> None:
         path = "/v1/greetings?name=Marin"
         try:
             assert (
-                first_client.get(path).json()["generated_at"] == "2026-09-07T00:00:00Z"
+                first_client.get(path).json()["data"]["generated_at"]
+                == "2026-09-07T00:00:00Z"
             )
             assert (
-                second_client.get(path).json()["generated_at"] == "2026-01-01T00:00:00Z"
+                second_client.get(path).json()["data"]["generated_at"]
+                == "2026-01-01T00:00:00Z"
             )
         finally:
             first.dependency_overrides.clear()
-        assert first_client.get(path).json()["generated_at"] == "2026-01-01T00:00:00Z"
+        assert (
+            first_client.get(path).json()["data"]["generated_at"]
+            == "2026-01-01T00:00:00Z"
+        )
 
 
 def test_app_assembly_does_not_call_clock() -> None:

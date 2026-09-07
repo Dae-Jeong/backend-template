@@ -22,7 +22,7 @@ def test_app_settings_are_independent() -> None:
     first = create_app(Settings(app_name="first", service_version="1"))
     second = create_app(Settings(app_name="second", service_version="2"))
     with TestClient(first) as client:
-        assert client.get("/").json() == {"message": "Hello, FastAPI!"}
+        assert client.get("/").json() == {"data": {"message": "Hello, FastAPI!"}}
         assert client.get("/openapi.json").json()["info"]["title"] == "first"
     assert second.title == "second"
     assert second.version == "2"

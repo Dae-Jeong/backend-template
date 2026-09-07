@@ -4,8 +4,10 @@ from fastapi import APIRouter, Query
 from pydantic import StringConstraints
 
 from template_api.dependencies import ClockDep
-from template_api.greetings.contracts import Greeting
+from template_api.errors import PROBLEM_RESPONSES
+from template_api.greetings.schemas import GreetingData
 from template_api.greetings.usecase import make_greeting
+from template_api.schemas import Success
 
 router = APIRouter(prefix="/v1/greetings", tags=["greetings"])
 
@@ -14,6 +16,9 @@ Name = Annotated[
 ]
 
 
-@router.get("", response_model=Greeting)
-def greeting(name: Name, clock: ClockDep) -> Greeting:
-    return make_greeting(name=name, clock=clock)
+@router.get("", response_model=Success[GreetingData], responses=PROBLEM_RESPONSES)
+def greeting(name: Name, clock: ClockDep) -> Success[GreetingData]:
+    result = make_greeting(name=name, clock=clock)
+    return Success(
+        data=GreetingData(message=result.message, generated_at=result.generated_at)
+    )

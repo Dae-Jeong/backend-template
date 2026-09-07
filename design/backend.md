@@ -151,6 +151,67 @@ DB 구현 시 단일 연결 동작, 트랜잭션 연결 고정, 지연 허용 �
 
 참고: Primary/Standby 복제와 비동기 복제의 지연·장애 전환 시 손실 가능성은 [PostgreSQL 공식 문서](https://www.postgresql.org/docs/current/high-availability.html)를 참고합니다. 확인일: 2026-09-07. 위 연결 선택 정책은 이 프로젝트의 설계 결정입니다.
 
+## HTTP 응답 계약
+
+Status: 사용자 합의 · 가벼운 자체 계약 · 2026-09-07
+
+성공 envelope는 프로젝트 선택이고 실패는 RFC 9457을 기반으로 합니다. JSON:API 전체 채택을 뜻하지 않습니다.
+
+기본 계약은 **업무 JSON 성공 응답은 `data`, 실패는 Problem Details**입니다.
+성공 데이터 위치를 일정하게 하고, 실패는 HTTP 상태와 기계 판독용 오류 코드를 함께 제공합니다.
+모든 결과를 HTTP 200으로 보내거나 본문에 `success`·HTTP status를 반복하지 않습니다.
+
+```json
+{
+  "data": {
+    "message": "Hello, Marin!",
+    "generated_at": "2026-09-07T00:00:00Z"
+  }
+}
+```
+
+실패는 HTTP 422와 `Content-Type: application/problem+json`으로 표현하는 예시입니다.
+`code`·`request_id`·`errors`는 이 템플릿의 확장 필드이며 RFC 필수 필드가 아닙니다.
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unprocessable Content",
+  "status": 422,
+  "code": "INVALID_INPUT",
+  "request_id": "서버가 생성한 요청 ID",
+  "errors": [{"location": ["query", "name"], "code": "REQUIRED"}]
+}
+```
+
+| 구분 | 계약 |
+| --- | --- |
+| 정상 | 200 조회·처리, 201 생성, 204 본문 없음. 실제 기능에 맞는 상태를 사용합니다. |
+| 입력 거절 | 422와 안정적인 필드 위치·오류 코드만 공개합니다. Pydantic 오류 원문·입력값·context를 그대로 반환하지 않습니다. |
+| 라우트·메서드 | 404·405도 동일 오류 스키마를 사용하고 `Allow` 등 의미 있는 프로토콜 헤더를 보존합니다. |
+| 업무 충돌 | 409 후보입니다. 품절·멱등 키 충돌 등의 코드와 HTTP 매핑은 실제 업무 계약에서 확정합니다. |
+| 예상 밖 오류 | 500·고정 `INTERNAL_ERROR`와 요청 ID만 공개하며 예외 메시지·traceback은 제외합니다. |
+| 추적 | 모든 대상 응답의 `X-Request-ID`를 유지하며 오류 본문의 `request_id`와 로그 ID가 일치합니다. |
+| 특별한 응답 | health·metrics·OpenAPI·문서·파일·stream에는 업무 JSON envelope를 씌우지 않습니다. |
+
+`about:blank`는 일반 HTTP 오류 유형입니다. 세분화된 문제 유형이 필요하면 소유한 안정적인 type URI와 문서를 정의합니다.
+클라이언트는 사람이 읽는 title 대신 HTTP 상태·약속한 code로 분기합니다.
+페이지네이션은 실제 목록 API가 생길 때 `meta`와 cursor 계약을 추가하며 현재 빈 필드는 만들지 않습니다.
+
+```mermaid
+flowchart LR
+    WORK["업무 결과 · 업무 오류"] --> API["API 경계 · 스키마 변환"]
+    API --> OK["성공 · data · 실제 HTTP 상태"]
+    INPUT["입력 검증 실패"] --> ERROR["오류 handler · 공개 코드 매핑"]
+    API --> ERROR
+    ERROR --> PROBLEM["실패 · Problem Details · 4xx 또는 5xx"]
+    ID["서버 요청 ID"] --> OK
+    ID --> PROBLEM
+```
+
+참고: [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html). 확인일: 2026-09-07.
+언어별 스키마·오류 매핑·검증 상태는 [구현별 설계](implementations/README.md)가 소유합니다.
+
 ## 공통 검증 기준
 
 | 대상 | 증거 |

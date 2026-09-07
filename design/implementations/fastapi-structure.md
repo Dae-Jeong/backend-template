@@ -46,6 +46,8 @@ flowchart TD
 | `src/template_api/run.py` | 설정 검증과 서버 실행 진입점입니다. |
 | `src/template_api/app.py` | 앱을 생성하고 설정·의존성·라우터를 조립합니다. |
 | `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
+| `src/template_api/schemas.py` | 공통 성공 envelope·Problem Details·공개 오류 코드 등 HTTP 응답 계약입니다. |
+| `src/template_api/errors.py` | 예외의 공개 응답 매핑·필드 위치 정제·OpenAPI 오류 media type 연결입니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
 | `src/template_api/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
 | `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`, HTTP 관측 결과·상태 enum과 불변 `LogContext`를 소유합니다. |
@@ -58,11 +60,13 @@ flowchart TD
 | `src/template_api/http_observation.py` | ASGI 전송·실행 결과를 관측하고 주입받은 지표에 기록합니다. |
 | `src/template_api/greetings/api.py` | 이름 입력 검증·라우팅·HTTP 응답 직렬화를 연결합니다. |
 | `src/template_api/greetings/contracts.py` | 기능의 불변 `Greeting` 결과 계약을 소유합니다. |
+| `src/template_api/greetings/schemas.py` | 인사 API의 외부 성공 데이터 `GreetingData`를 소유합니다. |
 | `src/template_api/greetings/usecase.py` | 계약을 받아 수행하는 일반 업무 함수를 소유합니다. |
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
 | `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
 | `tests/test_metrics.py` | 실제 HTTP 계측과 제어된 ASGI 실패·취소·앱별 지표 분리를 검증합니다. |
 | `tests/test_logging.py` | JSON·개인정보 제외·요청 ID·문맥 격리·취소·전송 오류·출력 실패를 검증합니다. |
+| `tests/test_responses.py` | 성공·오류 응답, 헤더·ID·OpenAPI 일치와 전송 시작 후 오류를 검증합니다. |
 | `tests/core/`, `tests/greetings/` | 책임별 검증을 묶습니다. 소스의 모든 파일·폴더와 일대일 대응을 강제하지 않습니다. |
 | `pyproject.toml`, `uv.lock`, `.python-version` | 패키지·개발 검사 기준·의존성 해석 결과·실행 Python 버전을 관리합니다. |
 | `.env.example` | 사용자가 복사할 환경 설정 예시입니다. 실제 `.env`는 Git에서 제외합니다. |
@@ -86,8 +90,8 @@ flowchart TD
 `schemas.py`는 HTTP 계약, 업무 dataclass는 내부 결과, `models.py`는 저장 구조를 뜻합니다.
 이름이 비슷해도 각 변경 이유가 다릅니다. 복잡한 기능에서는 명시적으로 변환하지만,
 필드가 같다는 이유만으로 세 종류의 타입과 매핑 코드를 무조건 만들지는 않습니다.
-현재 인사 API는 작은 불변 `Greeting` dataclass를 응답에도 사용합니다.
-외부 계약과 업무 결과가 달라지면 기능의 `schemas.py`에서 분리합니다.
+현재 인사 API는 불변 `Greeting` 업무 결과를 `greetings/schemas.py`의 외부 데이터로 변환하고
+공통 `Success`의 data에 담습니다. 업무 함수는 HTTP envelope를 알지 않습니다.
 
 기능 소유 타입은 해당 기능에 둡니다. 여러 곳에서 import한다는 이유만으로 전역 `schemas/`로 옮기지 않습니다.
 재사용 계약은 소유 영역의 `contracts.py`로 분리합니다. 프레임워크 독립 계약과 앱 조립용 계약은 섞지 않습니다.

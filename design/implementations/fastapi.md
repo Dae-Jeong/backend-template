@@ -115,84 +115,40 @@ FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일
 테스트는 provider override와 고정 clock으로 교체합니다. app.state는 provider가 접근하며 업무가 직접 조회하지 않습니다.
 현재 `dependencies.py`가 `get_clock`과 `ClockDep`를 소유하고, `core/contracts.py`가 시간 공급 계약을,
 `core/clock.py`가 UTC 구현을 소유합니다. 인사 결과는 `greetings/contracts.py`에 둡니다.
-`create_app(settings, *, clock=system_clock)`가 참조를 조립하며 인사 응답은 불변 dataclass를 FastAPI가 직렬화합니다.
+`create_app(settings, *, clock=system_clock)`가 참조를 조립하며 인사 API가 불변 업무 결과를 외부 응답 스키마로 변환합니다.
 
 `GET /v1/greetings?name=Marin`은 앞뒤 공백 제거 후 1~80자를 허용하고 message·UTC generated_at을 반환합니다.
 공백만 있거나 길이를 초과하면 422이며 업무 함수는 실행하지 않습니다. 인증 없는 로컬 예제입니다.
 
-## HTTP 응답 포맷 제안
+## HTTP 응답 포맷
 
-Status: 사용자 검토용 제안 · 미합의·미구현 · 2026-09-07
+Status: 사용자 합의 · 첫 HTTP 계약 구현·검증 · 2026-09-07
 
-현재 인사 응답은 내부 `Greeting`을 직접 직렬화하고, 입력 오류는 FastAPI 기본 422,
-예상 밖 오류는 기본 500 응답입니다. 로그 정제와 클라이언트 오류 응답 정제는 별도 책임입니다.
-아래 계약을 먼저 맞춘 후 실제 응답·OpenAPI·테스트를 함께 변경합니다.
-언어에 종속된 규칙이 아니며 다른 구현에도 공통으로 채택할지는 합의 후 공통 문서에서 소유합니다.
+언어 독립 포맷은 [Backend HTTP 응답 계약](../backend.md#http-응답-계약)이 소유합니다.
+FastAPI는 `schemas.py`의 `Success[T]`·`Problem`·오류 enum으로 이 계약을 구현합니다.
+`greetings/schemas.py`는 외부 `GreetingData`를 소유하고 API가 내부 `Greeting`을 명시적으로 변환합니다.
+성공 body를 다시 읽어 감싸는 middleware는 만들지 않습니다.
 
-제안은 **업무 JSON 성공 응답은 `data`, 실패는 Problem Details**입니다.
-성공 데이터 위치를 일정하게 하고, 실패는 HTTP 상태와 기계 판독용 오류 코드를 함께 제공합니다.
-모든 결과를 HTTP 200으로 보내거나 본문에 `success`·HTTP status를 반복하지 않습니다.
+`errors.py`가 RequestValidationError·HTTPException·예상 밖 Exception을 공개 오류로 변환합니다.
+기본 422 응답의 input·context·msg는 반환하지 않고 첫 20개 오류의 공개 위치·고정 코드만 제공합니다.
+현재 공개 위치는 `query.name`입니다. 새 입력을 추가할 때 승인한 위치와 코드 매핑을 함께 확장하며,
+알 수 없는 위치는 빈 배열, 알려지지 않은 검증 오류는 INVALID로 축약합니다.
+500은 고정 INTERNAL_ERROR입니다. 업무 충돌·멱등 오류는 해당 기능 도입 시 추가합니다.
 
-```json
-{
-  "data": {
-    "message": "Hello, Marin!",
-    "generated_at": "2026-09-07T00:00:00Z"
-  }
-}
-```
+`HttpObservation`이 요청 ID를 로그 설정 여부와 관계없이 생성해 request state와 응답 헤더에 전달합니다.
+오류 handler는 같은 ID를 본문에 넣습니다. bare factory 테스트에서는 오류 handler가 ID를 생성하지만
+전체 성공 응답의 ID·관측을 적용하는 실행 경로는 기존 `run.py`입니다.
+HTTPException의 의미 있는 헤더는 보존하고 Content-Type·Content-Length·X-Request-ID는 새 응답 기준으로 생성합니다.
 
-실패는 HTTP 422와 `Content-Type: application/problem+json`으로 표현하는 예시입니다.
-`code`·`request_id`·`errors`는 이 템플릿의 확장 필드이며 RFC 필수 필드가 아닙니다.
+Swagger 스키마는 FastAPI가 생성합니다. `problem_openapi`는 Problem 모델을 가리키는 응답의
+media type만 application/problem+json으로 조정하며 스키마 본문을 수기로 복제하지 않습니다.
+health·metrics 자체 응답과 204·stream 등은 envelope로 감싸지 않습니다.
+이미 전송이 시작된 오류는 Starlette의 기존 전송 상태 검사로 재응답하지 않고 원래 오류를 전파합니다.
+오류 handler에서 로그를 중복 기록하지 않으며 기존 ASGI 관측 경계가 오류 상세를 소유합니다.
 
-```json
-{
-  "type": "about:blank",
-  "title": "Unprocessable Content",
-  "status": 422,
-  "code": "INVALID_INPUT",
-  "request_id": "서버가 생성한 요청 ID",
-  "errors": [{"location": ["query", "name"], "code": "REQUIRED"}]
-}
-```
-
-| 구분 | 제안 기준 |
-| --- | --- |
-| 정상 | 200 조회·처리, 201 생성, 204 본문 없음. 실제 기능에 맞는 상태를 사용합니다. |
-| 입력 거절 | 422와 안정적인 필드 위치·오류 코드만 공개합니다. Pydantic 오류 원문·입력값·context를 그대로 반환하지 않습니다. |
-| 라우트·메서드 | 404·405도 동일 오류 스키마를 사용하고 `Allow` 등 의미 있는 프로토콜 헤더를 보존합니다. |
-| 업무 충돌 | 409 후보입니다. 품절·멱등 키 충돌 등의 코드와 HTTP 매핑은 실제 업무 계약에서 확정합니다. |
-| 예상 밖 오류 | 500·고정 `INTERNAL_ERROR`와 요청 ID만 공개하며 예외 메시지·traceback은 제외합니다. |
-| 추적 | 모든 대상 응답의 `X-Request-ID`를 유지하며 오류 본문의 `request_id`와 로그 ID가 일치합니다. |
-| 특별한 응답 | health·metrics·OpenAPI·문서·파일·stream에는 업무 JSON envelope를 씌우지 않습니다. |
-
-`about:blank`는 일반 HTTP 오류 유형입니다. 세분화된 문제 유형이 필요하면 소유한 안정적인 type URI와 문서를 정의합니다.
-클라이언트는 사람이 읽는 title 대신 HTTP 상태·약속한 code로 분기합니다.
-페이지네이션은 실제 목록 API가 생길 때 `meta`와 cursor 계약을 추가하며 현재 빈 필드는 만들지 않습니다.
-
-```mermaid
-flowchart LR
-    WORK["업무 결과 · 업무 오류"] --> API["API 경계 · 스키마 변환"]
-    API --> OK["성공 · data · 실제 HTTP 상태"]
-    INPUT["입력 검증 실패"] --> ERROR["오류 handler · 공개 코드 매핑"]
-    API --> ERROR
-    ERROR --> PROBLEM["실패 · Problem Details · 4xx 또는 5xx"]
-    ID["서버 요청 ID"] --> OK
-    ID --> PROBLEM
-```
-
-구현 시 외부 성공 스키마는 `greetings/schemas.py`, 공통 오류 스키마·handler는 HTTP 경계에 둡니다.
-내부 `Greeting`·업무 함수는 응답 envelope를 알지 않습니다. 응답 body를 읽고 재포장하는 범용 middleware는 추가하지 않습니다.
-이미 응답을 시작한 뒤의 오류·취소는 현재 ASGI 관측 계약대로 전파하고 새 오류 응답을 보내지 않습니다.
-500 handler를 추가해도 오류 상세 로그의 소유자는 현재 관측 경계로 유지합니다.
-
-검증 범위: 성공 schema와 Swagger 일치, 422·404·405·500 schema·Content-Type·status,
-입력 원문 비노출, 요청 ID 일치, 405 헤더 보존, 전송 시작 후 재응답 금지와 metrics·로그 회귀입니다.
-
-검토한 대안은 성공 본문을 직접 반환하고 오류만 통일하는 방식입니다. 중첩이 줄지만
-성공 데이터의 공통 접근 위치는 없어집니다. 이 프로젝트에는 명시적인 `data` 포맷을 제안합니다.
-참고(2026-09-07): [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html),
-[FastAPI 오류 handler](https://fastapi.tiangolo.com/tutorial/handling-errors/).
+전체 테스트 53개가 통과했습니다. 성공 schema·422/404/405/500·헤더/본문 요청 ID·입력 비노출·
+Swagger media type과 모델 참조·405 Allow·429 Retry-After·204·stream 재응답 금지와 로그·metrics 회귀를 검증했습니다.
+참고: [FastAPI 오류 handler](https://fastapi.tiangolo.com/tutorial/handling-errors/).
 
 ## 로깅과 metrics 매핑
 

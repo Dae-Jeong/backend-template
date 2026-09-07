@@ -73,8 +73,10 @@ class HttpObservation:
             return
 
         excluded = scope["path"] in EXCLUDED_PATHS
+        request_id = uuid4().hex
+        scope.setdefault("state", {})["request_id"] = request_id
         context = (
-            replace(self.log_context, work_id=uuid4().hex) if self.log_context else None
+            replace(self.log_context, work_id=request_id) if self.log_context else None
         )
         token = work_context.set(context)
 
@@ -88,17 +90,13 @@ class HttpObservation:
 
         async def observed_send(message: Message) -> None:
             nonlocal finished, status, send_failed
-            if (
-                message["type"] == "http.response.start"
-                and context is not None
-                and context.work_id is not None
-            ):
+            if message["type"] == "http.response.start":
                 message = dict(message)
                 message["headers"] = [
                     (key, value)
                     for key, value in message.get("headers", [])
                     if key.lower() != b"x-request-id"
-                ] + [(b"x-request-id", context.work_id.encode("ascii"))]
+                ] + [(b"x-request-id", request_id.encode("ascii"))]
             try:
                 await send(message)
             except OSError:
