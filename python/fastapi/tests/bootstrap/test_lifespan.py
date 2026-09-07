@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
 
 

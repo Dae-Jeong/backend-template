@@ -6,10 +6,10 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.testclient import TestClient
 from starlette.types import Message
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
-from template_api.http_observation import HttpObservation
-from template_api.schemas import Problem
+from template_api.http.observation import HttpObservation
+from template_api.http.schemas import Problem
 
 
 @pytest.mark.parametrize(

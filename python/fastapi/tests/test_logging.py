@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.contracts import LogContext
 from template_api.core.logging import (
     MAX_LOG_BYTES,
@@ -19,7 +19,7 @@ from template_api.core.logging import (
     work_context,
 )
 from template_api.core.settings import Settings
-from template_api.http_observation import HttpObservation
+from template_api.http.observation import HttpObservation
 
 
 @pytest.fixture

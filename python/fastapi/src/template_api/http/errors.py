@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from template_api.schemas import ErrorCode, FieldError, FieldErrorCode, Problem
+from template_api.http.schemas import ErrorCode, FieldError, FieldErrorCode, Problem
 
 FIELD_CODES = {
     "missing": FieldErrorCode.REQUIRED,

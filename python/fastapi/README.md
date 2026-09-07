@@ -199,7 +199,8 @@ flowchart TD
 HTTP 시험은 `app.dependency_overrides[get_clock]`에 clock 함수를 반환하는 provider를 등록합니다.
 clock은 timezone-aware UTC datetime을 반환하는 계약입니다.
 공통 `Clock`은 `core/contracts.py`, 인사 결과 `Greeting`은 `greetings/contracts.py`,
-앱 수명 타입은 루트 `contracts.py`가 소유합니다. 업무가 HTTP 조립 타입을 import하지 않습니다.
+앱 수명 타입은 `bootstrap/contracts.py`, HTTP provider는 `http/dependencies.py`가 소유합니다.
+업무가 HTTP 조립 타입을 import하지 않습니다.
 
 ## 환경 설정
 

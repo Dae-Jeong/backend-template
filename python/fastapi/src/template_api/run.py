@@ -3,11 +3,11 @@ import sys
 import uvicorn
 from pydantic import ValidationError
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.contracts import LogContext
 from template_api.core.logging import configure_logging
 from template_api.core.settings import Settings
-from template_api.http_observation import HttpObservation
+from template_api.http.observation import HttpObservation
 
 
 def main() -> None:

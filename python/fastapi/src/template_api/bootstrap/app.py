@@ -4,26 +4,26 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
-from template_api.contracts import PrepareResources
-from template_api.core.clock import system_clock
-from template_api.core.contracts import Clock, LogContext
-from template_api.core.lifespan import (
+from template_api.bootstrap.contracts import PrepareResources
+from template_api.bootstrap.lifespan import (
     create_lifespan,
     prepare_resources,
 )
+from template_api.core.clock import system_clock
+from template_api.core.contracts import Clock, LogContext
 from template_api.core.metrics import create_metrics
 from template_api.core.settings import Settings
-from template_api.errors import (
+from template_api.greetings.api import router as greetings_router
+from template_api.http.errors import (
     PROBLEM_RESPONSES,
     http_error,
     internal_error,
     problem_openapi,
     validation_error,
 )
-from template_api.greetings.api import router as greetings_router
-from template_api.health import router as health_router
-from template_api.metrics import router as metrics_router
-from template_api.schemas import MessageData, Success
+from template_api.http.health import router as health_router
+from template_api.http.metrics import router as metrics_router
+from template_api.http.schemas import MessageData, Success
 
 
 def index() -> Success[MessageData]:

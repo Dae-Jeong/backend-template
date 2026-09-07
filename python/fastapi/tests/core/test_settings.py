@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
 
 

@@ -25,44 +25,50 @@ DI 조립은 [DI 설계](fastapi-di-options.md)가 소유합니다.
 ## 현재 실제 구조
 
 아래 경로는 `python/fastapi/` 기준입니다. `src/`와 `tests/`는 같은 레벨입니다.
+패키지 루트에는 실행 진입점 `run.py`를 두고, 앱 조립은 `bootstrap/`, 공통 HTTP 처리는 `http/`로 묶습니다.
+`bootstrap/`은 업무 계층이 아니라 실행할 앱을 연결하는 곳입니다. `http/`는 기능별 API 전체를 모으는 폴더가 아니며,
+인사 API·입출력 스키마·업무 함수는 계속 `greetings/`가 소유합니다.
+`core/`는 `bootstrap/`·`http/`·기능 구현을 역으로 import하지 않습니다.
 
 ```mermaid
 flowchart TD
     PROJECT["python/fastapi/"] --> SRC["src/template_api/"]
     PROJECT --> TESTS["tests/"]
     PROJECT --> CONFIG["pyproject.toml · uv.lock · .python-version · .env.example"]
-    SRC --> ENTRY["app.py · run.py · dependencies.py"]
-    SRC --> APPCONTRACT["contracts.py · 앱 수명 계약"]
-    SRC --> HTTP["health.py · metrics.py · http_observation.py"]
-    SRC --> CORE["core/ · contracts.py · settings.py · clock.py · lifespan.py"]
+    SRC --> ENTRY["run.py · 프로세스 실행"]
+    SRC --> BOOT["bootstrap/ · app.py · contracts.py · lifespan.py"]
+    SRC --> HTTP["http/ · dependencies.py · schemas.py · errors.py · health.py · metrics.py · observation.py"]
+    SRC --> CORE["core/ · contracts.py · settings.py · clock.py · logging.py · metrics.py"]
     SRC --> FEATURE["greetings/ · contracts.py · api.py · usecase.py"]
     TESTS --> FIXTURE["conftest.py · 공통 격리 fixture"]
     TESTS --> CORETEST["core/ · 설정 시험"]
+    TESTS --> BOOTTEST["bootstrap/ · 수명 시험"]
     TESTS --> FEATURETEST["greetings/ · 인사·DI 시험"]
 ```
 
 | 경로 | 역할 |
 | --- | --- |
 | `src/template_api/run.py` | 설정 검증과 서버 실행 진입점입니다. |
-| `src/template_api/app.py` | 앱을 생성하고 설정·의존성·라우터를 조립합니다. |
-| `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
-| `src/template_api/schemas.py` | 공통 성공 envelope·Problem Details·공개 오류 코드 등 HTTP 응답 계약입니다. |
-| `src/template_api/errors.py` | 예외의 공개 응답 매핑·필드 위치 정제·OpenAPI 오류 media type 연결입니다. |
+| `src/template_api/bootstrap/app.py` | 앱을 생성하고 설정·의존성·라우터를 조립합니다. |
+| `src/template_api/http/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
+| `src/template_api/http/schemas.py` | 공통 성공 envelope·Problem Details·공개 오류 코드 등 HTTP 응답 계약입니다. |
+| `src/template_api/http/errors.py` | 예외의 공개 응답 매핑·필드 위치 정제·OpenAPI 오류 media type 연결입니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
-| `src/template_api/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
+| `src/template_api/bootstrap/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
 | `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`, HTTP 관측 결과·상태 enum과 불변 `LogContext`를 소유합니다. |
 | `src/template_api/core/logging.py` | 표준 logging 설정·허용 이벤트·JSON formatter·출력 실패 격리·ContextVar를 소유합니다. |
 | `src/template_api/core/clock.py` | UTC 시간 공급 구현을 제공합니다. |
-| `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
-| `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
+| `src/template_api/bootstrap/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
+| `src/template_api/http/health.py` | liveness/readiness HTTP 경계입니다. |
 | `src/template_api/core/metrics.py` | 앱별 Prometheus registry·지표와 그 구현 상태를 소유합니다. 업무 공개 계약이 아닙니다. |
-| `src/template_api/metrics.py` | `/metrics` 직렬화·실패 응답 HTTP 경계입니다. |
-| `src/template_api/http_observation.py` | ASGI 전송·실행 결과를 관측하고 주입받은 지표에 기록합니다. |
+| `src/template_api/http/metrics.py` | `/metrics` 직렬화·실패 응답 HTTP 경계입니다. |
+| `src/template_api/http/observation.py` | ASGI 전송·실행 결과를 관측하고 주입받은 지표에 기록합니다. |
 | `src/template_api/greetings/api.py` | 이름 입력 검증·라우팅·HTTP 응답 직렬화를 연결합니다. |
 | `src/template_api/greetings/contracts.py` | 기능의 불변 `Greeting` 결과 계약을 소유합니다. |
 | `src/template_api/greetings/schemas.py` | 인사 API의 외부 성공 데이터 `GreetingData`를 소유합니다. |
 | `src/template_api/greetings/usecase.py` | 계약을 받아 수행하는 일반 업무 함수를 소유합니다. |
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
+| `tests/bootstrap/test_lifespan.py` | 앱 초기화·종료·실패/취소 정리와 readiness를 검증합니다. |
 | `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
 | `tests/test_metrics.py` | 실제 HTTP 계측과 제어된 ASGI 실패·취소·앱별 지표 분리를 검증합니다. |
 | `tests/test_logging.py` | JSON·개인정보 제외·요청 ID·문맥 격리·취소·전송 오류·출력 실패를 검증합니다. |
@@ -103,8 +109,8 @@ flowchart LR
     API --> WORK["greetings/usecase.py"]
     WORK --> CONTRACT
     WORK --> COMMON["core/contracts.py · Clock"]
-    DEP["dependencies.py"] --> COMMON
-    APP["app.py · core/lifespan.py"] --> LIFECONTRACT["contracts.py · 앱 수명 타입"]
+    DEP["http/dependencies.py"] --> COMMON
+    APP["bootstrap/app.py · bootstrap/lifespan.py"] --> LIFECONTRACT["bootstrap/contracts.py · 앱 수명 타입"]
 ```
 
 화살표는 import 방향입니다. contracts는 해당 구현을 역으로 import하지 않습니다.

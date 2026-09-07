@@ -6,10 +6,10 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.metrics import HttpMetrics, create_metrics
 from template_api.core.settings import Settings
-from template_api.http_observation import HttpObservation
+from template_api.http.observation import HttpObservation
 
 
 def labels(
@@ -249,7 +249,7 @@ def test_exposition_failure_is_not_reported_as_empty_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "template_api.metrics.generate_latest",
+        "template_api.http.metrics.generate_latest",
         Mock(side_effect=RuntimeError("broken exporter")),
     )
     app = create_app(Settings())

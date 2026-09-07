@@ -4,13 +4,13 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from template_api.app import create_app
+from template_api.bootstrap.app import create_app
 from template_api.core.clock import system_clock
 from template_api.core.contracts import Clock
 from template_api.core.settings import Settings
-from template_api.dependencies import get_clock
 from template_api.greetings.contracts import Greeting
 from template_api.greetings.usecase import make_greeting
+from template_api.http.dependencies import get_clock
 
 
 def fixed_clock() -> datetime:

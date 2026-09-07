@@ -3,7 +3,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
-from template_api.contracts import Lifespan, PrepareResources
+from template_api.bootstrap.contracts import Lifespan, PrepareResources
 
 
 async def prepare_resources(app: FastAPI, stack: AsyncExitStack) -> None:
