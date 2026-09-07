@@ -15,19 +15,8 @@ uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검�
 현재 설치 버전과 확인한 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
 추가 의존성은 해당 단계에서 호환성을 확인하고 uv로 추가합니다.
 
-| 경로 후보: `python/fastapi/` 기준 | 책임 |
-| --- | --- |
-| `src/template_api/run.py` | 설정 검증 → logging 구성 → 앱 생성 → 단일 worker 서버 실행입니다. |
-| `src/template_api/app.py` | create_app, lifespan, health, 라우터 조립입니다. |
-| `src/template_api/core/settings.py` | 타입·범위가 있는 설정입니다. |
-| `src/template_api/core/clock.py` | 공통 시간 공급 타입과 UTC 구현입니다. |
-| `src/template_api/logging_config.py` | 표준 logging 설정·허용 필드·JSON 출력입니다. |
-| `src/template_api/metrics.py` | 앱별 registry와 측정 정의입니다. |
-| `src/template_api/http_observation.py` | 순수 ASGI 계측·작업 문맥·send/receive 관측입니다. |
-| `src/template_api/greetings/api.py` | Schema·Depends provider·라우터입니다. |
-| `src/template_api/greetings/usecase.py` | 일반 업무 함수와 내부 결과입니다. |
-| `tests/` | `src/`와 같은 레벨에 두며 `core/`·`greetings/` 등 책임별로 시험을 묶습니다. |
-| `Dockerfile`, `compose.yaml`, `.env.example` | 로컬 실행 구성입니다. 아직 파일은 없습니다. |
+파일별 역할·현재 배치·후속 분리 기준은 [폴더 구조와 활용 기준](fastapi-structure.md)이 소유합니다.
+이 문서는 실행·DI·수명·관측 계약을 정의하며 폴더 구조의 본문을 복제하지 않습니다.
 
 클래스 Builder·BaseService·BaseRepository·범용 container를 만들지 않습니다.
 상태·자원·DTO의 응집이 필요할 때는 클래스를 사용하며 OOP 자체를 금지하지 않습니다.

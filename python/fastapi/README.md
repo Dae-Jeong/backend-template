@@ -9,22 +9,8 @@ FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 
 ## 폴더 구조
 
-`src/`와 `tests/`는 `python/fastapi/` 바로 아래의 동급 디렉터리입니다.
-실행·앱 조립은 패키지 루트, 공통 기반은 `core/`, 업무 코드는 기능별 폴더에 둡니다.
-공통 HTTP provider는 루트 `dependencies.py`, 기능 전용 provider는 필요할 때 해당 기능 안에 둡니다.
-테스트는 책임별로 묶으며 소스의 모든 폴더를 빈 디렉터리로 복제하지 않습니다.
-
-```mermaid
-flowchart TD
-    PROJECT["python/fastapi/"] --> SRC["src/template_api/"]
-    PROJECT --> TESTS["tests/"]
-    SRC --> ENTRY["app.py · run.py · dependencies.py"]
-    SRC --> CORE["core/ · settings.py · clock.py"]
-    SRC --> FEATURE["greetings/ · api.py · usecase.py"]
-    TESTS --> FIXTURE["conftest.py · 공통 격리 fixture"]
-    TESTS --> CORETEST["core/ · 설정 시험"]
-    TESTS --> FEATURETEST["greetings/ · 인사·DI 시험"]
-```
+[폴더 구조와 활용 기준](../../design/implementations/fastapi-structure.md)에서 실제 구조 Mermaid,
+파일별 역할, 스키마·업무 타입·ORM 모델의 구분, 소비 프로젝트에서 변경할 수 있는 부분을 확인합니다.
 
 ## 빌드와 실행 흐름
 
