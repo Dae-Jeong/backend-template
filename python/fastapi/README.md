@@ -89,7 +89,10 @@ flowchart LR
     RUN --> STOP["SIGTERM · lifespan 종료"]
 ```
 
-Python·uv 이미지 digest를 고정했으며 갱신 시 버전·lock 호환성과 컨테이너를 재검증합니다.
+`local.sh`가 `.python-version`을 읽어 `PYTHON_VERSION` build argument로 전달합니다.
+Dockerfile의 공통 base를 빌드·런타임 단계에서 함께 사용합니다.
+Python 이미지는 해당 버전의 `slim-trixie` 태그이며 digest를 고정하지 않아 OS 이미지 갱신분은 달라질 수 있습니다.
+uv 이미지의 버전·digest는 Dockerfile에서 고정합니다. Python 갱신 시 lock 호환성과 컨테이너를 재검증합니다.
 linux/arm64에서 빌드·healthy·API/오류/관측·비 root·dev 도구/env 제외·유휴 종료·재기동을 확인했습니다.
 CPU 0.5개·512MiB·로그 10MiB×3개 설정을 확인했습니다. 부하·실제 로그 회전·amd64는 미검증입니다.
 상세한 수명·제약은 [컨테이너 설계](../../design/implementations/fastapi.md#로컬-컨테이너-실행)가 소유합니다.

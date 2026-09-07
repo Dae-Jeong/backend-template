@@ -3,7 +3,11 @@ set -eu
 
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 case "${1:-}" in
-  fastapi) implementation_dir="$repo_dir/python/fastapi" ;;
+  fastapi)
+    implementation_dir="$repo_dir/python/fastapi"
+    BACKEND_PYTHON_VERSION=$(cat "$implementation_dir/.python-version")
+    export BACKEND_PYTHON_VERSION
+    ;;
   *)
     printf '%s\n' 'Usage: ./local.sh fastapi [docker compose options] COMMAND [args...]' >&2
     exit 2

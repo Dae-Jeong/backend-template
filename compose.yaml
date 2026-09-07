@@ -3,6 +3,8 @@ services:
   api:
     build:
       context: ${BACKEND_BUILD_CONTEXT:-./python/fastapi}
+      args:
+        PYTHON_VERSION: ${BACKEND_PYTHON_VERSION:?Run ./local.sh fastapi to read .python-version}
     ports:
       - "127.0.0.1:18081:8000"
     environment:

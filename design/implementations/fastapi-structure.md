@@ -127,6 +127,7 @@ API는 기본 실행하고 Prometheus·Grafana는 `monitoring` profile로 선택
 ```mermaid
 flowchart TD
     ROOT["저장소 루트"] --> SELECT["local.sh · 구현 선택"]
+    VERSION[".python-version · 실행 Python 버전"] --> SELECT
     SELECT --> BASE["compose.yaml · API와 선택 monitoring profile"]
     BASE --> APP["python/fastapi/ · Dockerfile과 앱"]
     ROOT --> INFRA["infra/monitoring/"]
