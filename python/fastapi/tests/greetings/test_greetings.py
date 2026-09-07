@@ -5,10 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from template_api.app import create_app
-from template_api.clock import Clock, system_clock
+from template_api.core.clock import Clock, system_clock
+from template_api.core.settings import Settings
 from template_api.dependencies import get_clock
 from template_api.greetings.usecase import Greeting, make_greeting
-from template_api.settings import Settings
 
 
 def fixed_clock() -> datetime:

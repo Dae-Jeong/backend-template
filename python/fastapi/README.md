@@ -7,6 +7,27 @@ Status: 최소 HTTP 앱·환경 설정·패키지 빌드 검증 · 2026-09-07
 FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 `src/template_api/`가 애플리케이션 코드의 시작점입니다.
 
+## 폴더 구조
+
+`src/`와 `tests/`는 `python/fastapi/` 바로 아래의 동급 디렉터리입니다.
+실행·앱 조립은 패키지 루트, 공통 기반은 `core/`, 업무 코드는 기능별 폴더에 둡니다.
+공통 HTTP provider는 루트 `dependencies.py`, 기능 전용 provider는 필요할 때 해당 기능 안에 둡니다.
+테스트는 책임별로 묶으며 소스의 모든 폴더를 빈 디렉터리로 복제하지 않습니다.
+
+```mermaid
+flowchart TD
+    PROJECT["python/fastapi/"] --> SRC["src/template_api/"]
+    PROJECT --> TESTS["tests/"]
+    SRC --> ENTRY["app.py · run.py · dependencies.py"]
+    SRC --> CORE["core/ · settings.py · clock.py"]
+    SRC --> FEATURE["greetings/ · api.py · usecase.py"]
+    TESTS --> FIXTURE["conftest.py · 공통 격리 fixture"]
+    TESTS --> CORETEST["core/ · 설정 시험"]
+    TESTS --> FEATURETEST["greetings/ · 인사·DI 시험"]
+```
+
+## 빌드와 실행 흐름
+
 ```mermaid
 flowchart TD
     SOURCE["pyproject.toml · src/"] --> BUILD["uv build"]

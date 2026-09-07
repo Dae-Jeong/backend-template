@@ -69,6 +69,8 @@ flowchart TD
 Python 3.14.7과 lock 기반 설치를 확인했습니다. 실제 명령은 [사용 안내](../../python/fastapi/README.md)에 있습니다.
 개발 검증 보완: Ruff lint·format·ty 검사와 환경 오염 주입 pytest 3개가 통과했습니다.
 프로젝트별 설정과 테스트 환경 격리를 추가했고, TestClient는 공식 권장 httpx2로 전환했습니다.
+폴더 구조 보완: 공통 기반은 `src/template_api/core/`, 기능은 `greetings/`로 구분했습니다.
+`tests/`는 `src/`와 동급에 두고 책임별로 묶었습니다. 이동 후 테스트 14개·lint·포맷·타입 검사·빌드가 통과했습니다.
 
 목표:
 `python/fastapi/`에 프로젝트의 가장 작은 설치·실행 단위를 만듭니다.

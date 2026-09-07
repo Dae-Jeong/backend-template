@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from template_api.clock import Clock
+from template_api.core.clock import Clock
 
 
 @dataclass(frozen=True)

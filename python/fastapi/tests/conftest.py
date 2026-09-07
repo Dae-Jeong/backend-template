@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from template_api.settings import Settings
+from template_api.core.settings import Settings
 
 
 @pytest.fixture(autouse=True)

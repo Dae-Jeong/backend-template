@@ -4,7 +4,7 @@ import uvicorn
 from pydantic import ValidationError
 
 from template_api.app import create_app
-from template_api.settings import Settings
+from template_api.core.settings import Settings
 
 
 def main() -> None:

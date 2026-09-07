@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
 from template_api.app import create_app
-from template_api.settings import Settings
+from template_api.core.settings import Settings
 
 
 def test_environment_overrides_dotenv(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

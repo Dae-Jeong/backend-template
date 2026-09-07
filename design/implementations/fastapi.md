@@ -19,13 +19,14 @@ uv lockfile과 pytest·httpx2·Ruff·ty로 설치·테스트·lint·타입 검�
 | --- | --- |
 | `src/template_api/run.py` | 설정 검증 → logging 구성 → 앱 생성 → 단일 worker 서버 실행입니다. |
 | `src/template_api/app.py` | create_app, lifespan, health, 라우터 조립입니다. |
-| `src/template_api/settings.py` | 타입·범위가 있는 설정입니다. |
+| `src/template_api/core/settings.py` | 타입·범위가 있는 설정입니다. |
+| `src/template_api/core/clock.py` | 공통 시간 공급 타입과 UTC 구현입니다. |
 | `src/template_api/logging_config.py` | 표준 logging 설정·허용 필드·JSON 출력입니다. |
 | `src/template_api/metrics.py` | 앱별 registry와 측정 정의입니다. |
 | `src/template_api/http_observation.py` | 순수 ASGI 계측·작업 문맥·send/receive 관측입니다. |
 | `src/template_api/greetings/api.py` | Schema·Depends provider·라우터입니다. |
 | `src/template_api/greetings/usecase.py` | 일반 업무 함수와 내부 결과입니다. |
-| `tests/` | 단위·HTTP·lifecycle·ASGI·격리 시험입니다. |
+| `tests/` | `src/`와 같은 레벨에 두며 `core/`·`greetings/` 등 책임별로 시험을 묶습니다. |
 | `Dockerfile`, `compose.yaml`, `.env.example` | 로컬 실행 구성입니다. 아직 파일은 없습니다. |
 
 클래스 Builder·BaseService·BaseRepository·범용 container를 만들지 않습니다.
@@ -71,7 +72,7 @@ factory/import에서 I/O·프로세스 logger 변경을 하지 않습니다. han
 FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일반 인자를 받습니다.
 `get_clock` provider가 시간 공급 함수를 반환하고, 업무 함수가 호출하도록 예제를 구성합니다.
 테스트는 provider override와 고정 clock으로 교체합니다. app.state는 provider가 접근하며 업무가 직접 조회하지 않습니다.
-현재 `dependencies.py`가 `get_clock`과 `ClockDep`를 소유하고, `clock.py`가 시간 공급 타입과 UTC 구현을 소유합니다.
+현재 `dependencies.py`가 `get_clock`과 `ClockDep`를 소유하고, `core/clock.py`가 시간 공급 타입과 UTC 구현을 소유합니다.
 `create_app(settings, *, clock=system_clock)`가 참조를 조립하며 인사 응답은 불변 dataclass를 FastAPI가 직렬화합니다.
 
 `GET /v1/greetings?name=Marin`은 앞뒤 공백 제거 후 1~80자를 허용하고 message·UTC generated_at을 반환합니다.
