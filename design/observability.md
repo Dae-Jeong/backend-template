@@ -107,4 +107,4 @@ queue 깊이·가장 오래된 대기·활성 연결·복구, 필요한 업무 �
 | [Google SRE](https://sre.google/workbook/monitoring/) | 로그·metrics·tracing의 역할 구분입니다. |
 | [Uber Logging](https://www.uber.com/ie/en/blog/logging/) | 후속 대규모 수집·검색 확장 참고입니다. |
 
-자체 Logger 계층보다 각 언어의 관용적인 logging API를 우선합니다. Python의 구체적 호출과 문맥 전달은 [FastAPI 설계](implementations/fastapi.md)가 소유합니다.
+자체 Logger 계층보다 각 언어의 관용적인 logging API를 우선합니다. 구체적인 호출과 문맥 전달은 [구현별 설계](implementations/README.md)가 소유합니다.

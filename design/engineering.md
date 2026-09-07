@@ -8,8 +8,7 @@ Status: 개발 기준 정본 · 2026-09-07. 문서 기준이며 자동 검사의
 | --- | --- |
 | 책임·조립·수명·완료 의미 | [Backend 공통 설계](backend.md) |
 | 로깅·metrics·문맥·수집 경계 | [관측 설계](observability.md) |
-| Python·DI·ASGI 구현 | [FastAPI 설계](implementations/fastapi.md) |
-| 검증 케이스 | [FastAPI 검증](implementations/fastapi-verification.md) |
+| 기술별 구현·검증 케이스 | [구현별 설계 안내](implementations/README.md) |
 | 성능·런타임·용량·월 비용 가정 | [Runtime Review](runtime-review.md) |
 
 이 문서는 구체적인 개발 판단 원칙을 소유하고 공통 구조의 본문을 복제하지 않습니다.

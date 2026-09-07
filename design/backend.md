@@ -68,4 +68,4 @@ DB를 추가할 때는 업무 경계가 원자적 범위를 정하고 같은 작
 | 격리 | 기본 시험은 외부 서비스·개인 환경·운영 DB에 의존하지 않습니다. |
 | 재현성 | 구현 시 의존성·실행·lint·테스트 명령을 고정하고 실제 실행 결과를 남깁니다. |
 
-프로토콜별 계측과 관측 확장은 [관측 설계](observability.md), 첫 구현은 [FastAPI 설계](implementations/fastapi.md)를 참고합니다.
+프로토콜별 계측과 관측 확장은 [관측 설계](observability.md), 기술별 실현 방법은 [구현별 설계](implementations/README.md)를 참고합니다.
