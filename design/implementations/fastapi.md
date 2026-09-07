@@ -1,0 +1,159 @@
+# Python / FastAPI 구현 설계
+
+Status: design-only · 코드·테스트·manifest 미구현 · 2026-09-07
+
+[Backend 계약](../backend.md)과 [관측 계약](../observability.md)을 FastAPI에서 구현하는 후보입니다.
+첫 기능은 DB 없는 인사 API이며 다른 서비스·사용자 환경에 의존하지 않습니다.
+
+## 구성과 의존성
+
+Python 3.12, FastAPI, Uvicorn, pydantic-settings, prometheus-client를 후보로 둡니다.
+uv lockfile과 pytest·httpx·Ruff를 사용해 설치·테스트·lint를 재현하는 방향입니다.
+정확한 버전과 호환성은 구현 전 확인하고 고정합니다. 아직 패키지를 설치하지 않았습니다.
+
+| 경로 후보: `python/fastapi/` 기준 | 책임 |
+| --- | --- |
+| `src/template_api/run.py` | 설정 검증 → logging 구성 → 앱 생성 → 단일 worker 서버 실행입니다. |
+| `src/template_api/app.py` | create_app, lifespan, health, 라우터 조립입니다. |
+| `src/template_api/settings.py` | 타입·범위가 있는 설정입니다. |
+| `src/template_api/logging_config.py` | 표준 logging 설정·허용 필드·JSON 출력입니다. |
+| `src/template_api/metrics.py` | 앱별 registry와 측정 정의입니다. |
+| `src/template_api/http_observation.py` | 순수 ASGI 계측·작업 문맥·send/receive 관측입니다. |
+| `src/template_api/greetings/api.py` | Schema·Depends provider·라우터입니다. |
+| `src/template_api/greetings/usecase.py` | 일반 업무 함수와 내부 결과입니다. |
+| `tests/` | 단위·HTTP·lifecycle·ASGI·격리 시험입니다. |
+| `Dockerfile`, `compose.yaml`, `.env.example` | 로컬 실행 구성입니다. 아직 파일은 없습니다. |
+
+클래스 Builder·BaseService·BaseRepository·범용 container를 만들지 않습니다.
+상태·자원·DTO의 응집이 필요할 때는 클래스를 사용하며 OOP 자체를 금지하지 않습니다.
+공통 기반은 복사형 템플릿이며 별도 runtime 패키지나 generator는 현재 범위가 아닙니다.
+
+## 초기화와 DI
+
+```mermaid
+flowchart TD
+    ENTRY["run · Settings 검증"] --> LOG["프로세스 logging 1회 설정"]
+    LOG --> APP["create_app(settings)"]
+    APP --> STATE["앱별 registry · ready=false · DI override"]
+    STATE --> LIFE["lifespan · 필요한 자원 준비"]
+    LIFE -->|"성공"| READY["ready=true"]
+    LIFE -->|"실패"| CLEAN["획득 자원 정리 · 시작 실패"]
+    READY --> STOP["서버 drain 이후 lifespan 종료"]
+    STOP --> END["ready=false · 자원 정리"]
+```
+
+factory/import에서 I/O·프로세스 logger 변경을 하지 않습니다. handler는 프로세스 공용이며 앱별 문맥은 이벤트에 주입합니다.
+서버 로그 설정이 앱 설정을 덮거나 handler를 중복 등록하지 않도록 실행 조립 지점에서 소유합니다.
+설정 실패 시 입력값을 제외한 필드 이름·고정 오류 코드만 stderr에 출력합니다.
+향후 pool/client를 만들 때 lifespan에서 획득 직후 AsyncExitStack 등에 정리를 등록합니다.
+초기 버전에는 외부 자원이 없으며 초기화 실패는 가짜 async 자원으로 검증합니다.
+
+FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일반 인자를 받습니다.
+`get_clock` provider가 시간 공급 함수를 반환하고, 업무 함수가 호출하도록 예제를 구성합니다.
+테스트는 provider override와 고정 clock으로 교체합니다. app.state는 provider가 접근하며 업무가 직접 조회하지 않습니다.
+
+`GET /v1/greetings?name=Marin`은 앞뒤 공백 제거 후 1~80자를 허용하고 message·UTC generated_at을 반환합니다.
+공백만 있거나 길이를 초과하면 422이며 업무 함수는 실행하지 않습니다. 인증 없는 로컬 예제입니다.
+
+## 로깅과 metrics 매핑
+
+표준 `logging.getLogger(__name__)`와 info/warning/error를 사용합니다. 고정 메시지와 허용한 extra만 전달합니다.
+TypedDict는 작성 시 도움이며 런타임 검증은 formatter/filter가 별도로 수행합니다.
+
+```python
+logger.info(
+    "greeting.completed",
+    extra={"event_action": "greeting.completed", "event_outcome": "success"},
+)
+```
+
+서비스 설정·작업 ID는 작업별 immutable ContextVar 문맥으로 주입합니다. finally에서 token을 복원합니다.
+동시 요청에 mutable dict를 공유하지 않습니다. 자식 task의 상속 문맥은 부모 reset으로 사라지지 않으므로
+background 작업은 별도 문맥·수명을 갖습니다. queue 도입 시 enqueue 전에 문맥을 복사합니다.
+로그는 UTF-8 16 KiB, 최대 20 stack frame을 초기 상한 후보로 둡니다. 선택 필드를 줄인 후 JSON을 다시 직렬화하고 잘림을 표시합니다.
+형식·출력 실패를 같은 logger로 재귀 보고하지 않습니다. 개인정보·예약 필드 충돌을 시험합니다.
+
+HTTP counter `http_requests_total`과 histogram `http_request_duration_seconds`를 제공합니다.
+앱별 registry를 사용하고 라벨은 제한된 method·route template·status·completion·execution입니다.
+status가 없으면 고정값 none을 쓰고 미일치 route는 unmatched로 합칩니다. health·metrics 요청은 제외합니다.
+지연 bucket 후보(초)는 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5입니다.
+CPU/RSS는 지원하는 process collector에서 확인하며 OOM·재시작은 컨테이너 관측 책임입니다.
+시계열 수집기·저장·경보·HPA·프로파일링·분산 trace는 포함하지 않습니다.
+
+## 요청 종료와 취소
+
+완성된 FastAPI 오류 처리 경계 바깥의 순수 ASGI wrapper로 관측하는 후보입니다.
+내부 FastAPI 객체에서 DI override를 관리하고 wrapper는 설정·registry를 별도로 중복 소유하지 않습니다.
+HTTP 이외 scope는 그대로 위임하며 BaseHTTPMiddleware의 문맥 전달 제약에 의존하지 않습니다.
+
+```mermaid
+sequenceDiagram
+    participant Edge as ASGI wrapper
+    participant App as FastAPI
+    participant Send as 서버 send
+    Edge->>Edge: 문맥 · 타이머 설정
+    Edge->>App: scope, receive, wrapped_send 전달
+    App->>Send: wrapped_send를 통해 응답 전송
+    Send-->>Edge: send 반환 · 완료 시점 관측
+    App-->>Edge: 반환 또는 예외·취소
+    Edge->>Edge: 요약·지표 1회 시도 · 문맥 복원
+    Note over Edge: 원래 오류·취소를 유지합니다.
+```
+
+`send` 반환 후 전송 상태를 갱신합니다. JSON 응답의 최종 body 반환까지를 지연으로 측정하며 클라이언트 수신을 보장하지 않습니다.
+trailers는 첫 계약에서 제외하며 추가 시 완료 지점을 확장합니다. receive는 앱이 읽은 이벤트만 관측하고 body를 별도 소비하지 않습니다.
+disconnect 관측은 task 취소와 같지 않으며 즉시 탐지도 보장하지 않습니다. 전송 중 OSError는 일반 앱 오류와 분리합니다.
+
+completion 후보는 complete/cancelled/send_failed/disconnected/incomplete, execution은 returned/error/cancelled입니다.
+최종 body 완료 뒤 background 오류는 complete와 error를 함께 기록합니다. 지연은 body 완료 시 저장한 값입니다.
+요약은 앱 호출 종료 finally에서 1회 시도합니다. 실제 status 없는 취소를 499 전송으로 꾸미지 않습니다.
+CancelledError를 삼키지 않고 cleanup 후 다시 전파합니다. 관측 실패가 원래 실패나 문맥 복원을 방해하지 않게 합니다.
+응답 시작 후 새 500 응답을 보내지 않습니다. 강제 종료에서는 로그·finally를 보장하지 않습니다.
+
+## 로컬 실행 후보
+
+단일 API 컨테이너만 사용하며 DB·프록시·모니터링 서버는 추가하지 않습니다.
+Dockerfile은 비 root 실행과 lock 기반 설치, `.env`·개발 캐시 제외를 포함할 예정입니다.
+아래는 아직 실행할 수 없는 manifest 설계 예시입니다.
+
+```yaml
+name: backend-template-fastapi
+services:
+  api:
+    build: .
+    command: ["python", "-m", "template_api.run"]
+    ports: ["127.0.0.1:${HTTP_PORT:-18080}:8000"]
+    environment:
+      APP_NAME: "${APP_NAME:-fastapi-template}"
+      APP_ENV: local
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      SERVICE_VERSION: "${SERVICE_VERSION:-dev}"
+    init: true
+    cpus: 0.5
+    mem_limit: 512m
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+```
+
+실제 `.env`를 만들 때 아래 예시 값으로 시작할 예정입니다. 비밀값은 없습니다.
+
+```dotenv
+HTTP_PORT=18080
+APP_NAME=fastapi-template
+LOG_LEVEL=INFO
+SERVICE_VERSION=dev
+```
+
+Compose 변수 치환과 앱 환경 주입을 분리합니다. 실제 `.env`는 Git·이미지에 넣지 않고 example만 추적합니다.
+run은 컨테이너 내부 0.0.0.0:8000에서 단일 worker로 실행하고 접근 로그 원문 출력을 끕니다.
+readiness healthcheck, graceful shutdown timeout, 로그 보관·자원 상한은 구현 시 manifest와 검증을 함께 추가합니다.
+후보 수치는 처리 능력이나 종료 보장 수치가 아닙니다. 실제 기동 전에 포트 점유를 확인합니다.
+
+## 확인할 사항
+
+정확한 의존성 버전·이미지·예외 처리 배치·ASGI wrapper·logging entrypoint의 호환성을 구현 전에 고정합니다.
+실행 명령은 파일을 만든 뒤 검증하여 README에 제공합니다. [검증 케이스](fastapi-verification.md)는 아직 모두 미실행입니다.
+
+참고(확인일 2026-09-07): [FastAPI DI](https://fastapi.tiangolo.com/tutorial/dependencies/), [lifespan](https://fastapi.tiangolo.com/advanced/events/), [Starlette middleware](https://starlette.dev/middleware/), [ASGI HTTP](https://asgi.readthedocs.io/en/latest/specs/www.html), [Python logging](https://docs.python.org/3/library/logging.html), [ContextVar 로깅](https://docs.python.org/3/howto/logging-cookbook.html#use-of-contextvars), [Compose 환경변수](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
