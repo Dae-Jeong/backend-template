@@ -4,7 +4,8 @@ from fastapi import APIRouter, Query
 from pydantic import StringConstraints
 
 from template_api.dependencies import ClockDep
-from template_api.greetings.usecase import Greeting, make_greeting
+from template_api.greetings.contracts import Greeting
+from template_api.greetings.usecase import make_greeting
 
 router = APIRouter(prefix="/v1/greetings", tags=["greetings"])
 

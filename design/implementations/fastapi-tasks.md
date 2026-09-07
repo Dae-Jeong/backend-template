@@ -22,9 +22,9 @@ uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구
 | 1 | 개발 검증 설정 · 완료 | 프로젝트 자체 Ruff·pytest·ty 설정과 환경 격리 검증 완료. 상위 라이브러리 경고 1건은 표시 유지·제거 조건 기록 | 1 보완 |
 | 2 | API·DI 기본형 · 완료 | B안으로 인사 API·입력 검증·clock 주입·앱별 override 검증 | 2 |
 | 3 | 초기화·종료·health · 완료 | lifespan·health·실패/취소 정리·SIGTERM 요청 drain 검증 | 3 |
-| 4 | 오류 응답 계약 | 입력 거절·업무 오류·예상 밖 오류의 응답, 민감정보 제외, 응답 시작 후 오류·취소 보존 | 2·4 |
+| 4 | HTTP metrics · 다음 작업 | 요청 수·지연·결과, 제한된 라벨, 앱별 registry, `/metrics` 수집 endpoint, 관측 실패·동시 요청 격리 | 4 |
 | 5 | 구조화 로그 | 표준 logging 설정 1회, JSON·허용 필드, 요청 ID·ContextVar, 오류 중복 기록 방지 | 4 |
-| 6 | HTTP metrics | 요청 수·지연·결과, 제한된 라벨, 앱별 registry, 관측 실패와 동시 요청 격리 | 4 |
+| 6 | 오류 응답 계약 | 입력 거절·업무 오류·예상 밖 오류의 응답, 민감정보 제외, 응답 시작 후 오류·취소 보존 | 2·4 |
 | 7 | 컨테이너 실행 | 단일 API Dockerfile·Compose, lock 설치, 비 root, env 제외, 포트·자원·로그 보관 상한 | 4 |
 | 8 | 예약 계약 | 수량 불변조건, 성공·품절, 멱등 키 범위·충돌·보존 기간·진행 중 중복 정책 | 5 |
 | 9 | DB 통합 | DB·driver·저장 도구 선택, 격리 DB 대상, migration, pool 예산·timeout·트랜잭션 소유권 | 6 |
@@ -40,10 +40,10 @@ Sentry·Elastic·Replica·샤딩·LB·Gateway·캐시·브로커는 현재 설�
 flowchart TD
     DEV["개발 검증 설정"] --> API["API · DI"]
     API --> LIFE["초기화 · 종료 · health"]
-    LIFE --> ERROR["오류 응답 계약"]
-    ERROR --> LOG["구조화 로그"]
-    LOG --> METRICS["HTTP metrics"]
-    METRICS --> CONTAINER["단일 API 컨테이너"]
+    LIFE --> METRICS["HTTP metrics"]
+    METRICS --> LOG["구조화 로그"]
+    LOG --> ERROR["오류 응답 계약"]
+    ERROR --> CONTAINER["단일 API 컨테이너"]
     CONTAINER --> CONTRACT["예약 계약"]
     CONTRACT --> DB["단일 Primary 통합"]
     DB --> CONCURRENCY["동시성 보호"]
@@ -109,6 +109,10 @@ Settings와 실행 진입점, lifespan, 생존·준비 상태를 구현합니다
 - 정상 종료와 취소에서 소유 자원이 정리되며 외부 자원은 시험 대역만 사용합니다.
 
 ## Task 4. 로그와 HTTP 계측
+
+진행 순서: 사용자 결정으로 Metrics → Logging 순서입니다.
+먼저 앱에서 HTTP 지표를 생성하고 `/metrics`로 수집 가능하게 합니다. 외부 수집기 구축·직접 push는 대상과 전달 방식을 별도 확인합니다.
+metrics 단계에서 오류·취소를 계측하되 로그 출력을 선행 의존으로 요구하지 않습니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.

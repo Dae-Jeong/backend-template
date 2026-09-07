@@ -2,7 +2,7 @@ from typing import Annotated, cast
 
 from fastapi import Depends, Request
 
-from template_api.core.clock import Clock
+from template_api.core.contracts import Clock
 
 
 def get_clock(request: Request) -> Clock:

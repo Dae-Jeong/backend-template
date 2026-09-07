@@ -1,13 +1,5 @@
-from dataclasses import dataclass
-from datetime import datetime
-
-from template_api.core.clock import Clock
-
-
-@dataclass(frozen=True)
-class Greeting:
-    message: str
-    generated_at: datetime
+from template_api.core.contracts import Clock
+from template_api.greetings.contracts import Greeting
 
 
 def make_greeting(*, name: str, clock: Clock) -> Greeting:

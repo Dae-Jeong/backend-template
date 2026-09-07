@@ -1,10 +1,9 @@
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
-type PrepareResources = Callable[[FastAPI, AsyncExitStack], Awaitable[None]]
-type Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
+from template_api.contracts import Lifespan, PrepareResources
 
 
 async def prepare_resources(app: FastAPI, stack: AsyncExitStack) -> None:

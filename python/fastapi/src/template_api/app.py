@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 
-from template_api.core.clock import Clock, system_clock
+from template_api.contracts import PrepareResources
+from template_api.core.clock import system_clock
+from template_api.core.contracts import Clock
 from template_api.core.lifespan import (
-    PrepareResources,
     create_lifespan,
     prepare_resources,
 )

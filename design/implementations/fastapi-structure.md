@@ -32,8 +32,9 @@ flowchart TD
     PROJECT --> TESTS["tests/"]
     PROJECT --> CONFIG["pyproject.toml · uv.lock · .python-version · .env.example"]
     SRC --> ENTRY["app.py · run.py · dependencies.py"]
-    SRC --> CORE["core/ · settings.py · clock.py"]
-    SRC --> FEATURE["greetings/ · api.py · usecase.py"]
+    SRC --> APPCONTRACT["contracts.py · 앱 수명 계약"]
+    SRC --> CORE["core/ · contracts.py · settings.py · clock.py · lifespan.py"]
+    SRC --> FEATURE["greetings/ · contracts.py · api.py · usecase.py"]
     TESTS --> FIXTURE["conftest.py · 공통 격리 fixture"]
     TESTS --> CORETEST["core/ · 설정 시험"]
     TESTS --> FEATURETEST["greetings/ · 인사·DI 시험"]
@@ -45,11 +46,14 @@ flowchart TD
 | `src/template_api/app.py` | 앱을 생성하고 설정·의존성·라우터를 조립합니다. |
 | `src/template_api/dependencies.py` | 공통 HTTP provider와 Depends 타입을 연결합니다. 업무 계층이 아닙니다. |
 | `src/template_api/core/settings.py` | 환경 설정의 타입·기본값·검증을 소유합니다. |
-| `src/template_api/core/clock.py` | 시간 공급 타입과 UTC 구현을 제공합니다. |
+| `src/template_api/contracts.py` | FastAPI 앱 수명 조립용 `PrepareResources`·`Lifespan` 계약입니다. 업무에서는 import하지 않습니다. |
+| `src/template_api/core/contracts.py` | 프레임워크 독립 공통 계약 `Clock`을 소유합니다. |
+| `src/template_api/core/clock.py` | UTC 시간 공급 구현을 제공합니다. |
 | `src/template_api/core/lifespan.py` | 준비 함수 주입·앱별 readiness·실패/취소 시 자원 정리를 소유합니다. |
 | `src/template_api/health.py` | liveness/readiness HTTP 경계입니다. |
 | `src/template_api/greetings/api.py` | 이름 입력 검증·라우팅·HTTP 응답 직렬화를 연결합니다. |
-| `src/template_api/greetings/usecase.py` | 일반 업무 함수와 불변 `Greeting` 결과를 소유합니다. |
+| `src/template_api/greetings/contracts.py` | 기능의 불변 `Greeting` 결과 계약을 소유합니다. |
+| `src/template_api/greetings/usecase.py` | 계약을 받아 수행하는 일반 업무 함수를 소유합니다. |
 | `tests/conftest.py` | 개인 환경변수·dotenv가 테스트에 유입되지 않게 격리합니다. |
 | `tests/test_server.py` | 격리된 실제 Uvicorn 프로세스의 SIGTERM 요청 drain·자원 정리 순서를 검증합니다. |
 | `tests/core/`, `tests/greetings/` | 책임별 검증을 묶습니다. 소스의 모든 파일·폴더와 일대일 대응을 강제하지 않습니다. |
@@ -65,6 +69,7 @@ flowchart TD
 | --- | --- |
 | `api.py` | HTTP 입력·상태 코드·응답을 다룹니다. |
 | `schemas.py` | 외부 요청·응답 Pydantic 스키마를 둡니다. API 계약을 독립적으로 관리할 필요가 생기면 분리합니다. |
+| `contracts.py` | 기능이 공개하는 내부 타입·행위 계약을 둡니다. API·usecase·repository 구현을 import하지 않습니다. |
 | `dependencies.py` | 해당 기능 전용 의존성을 조립합니다. 공통 provider를 필요한 만큼 재사용합니다. |
 | `usecase.py` | 업무 순서·원자적 범위를 정합니다. 복잡해지면 실제 업무 이름의 파일로 나눕니다. |
 | `domain.py` | 상태·불변조건·정책을 둡니다. 독립된 정책이 없는 기능에는 만들지 않습니다. |
@@ -78,6 +83,21 @@ flowchart TD
 외부 계약과 업무 결과가 달라지면 기능의 `schemas.py`에서 분리합니다.
 
 기능 소유 타입은 해당 기능에 둡니다. 여러 곳에서 import한다는 이유만으로 전역 `schemas/`로 옮기지 않습니다.
+재사용 계약은 소유 영역의 `contracts.py`로 분리합니다. 프레임워크 독립 계약과 앱 조립용 계약은 섞지 않습니다.
+타입별 단일 파일을 강제하지 않으며 타입을 가져오려고 구현 모듈까지 import하지 않도록 합니다.
+
+```mermaid
+flowchart LR
+    API["greetings/api.py"] --> CONTRACT["greetings/contracts.py"]
+    API --> WORK["greetings/usecase.py"]
+    WORK --> CONTRACT
+    WORK --> COMMON["core/contracts.py · Clock"]
+    DEP["dependencies.py"] --> COMMON
+    APP["app.py · core/lifespan.py"] --> LIFECONTRACT["contracts.py · 앱 수명 타입"]
+```
+
+화살표는 import 방향입니다. contracts는 해당 구현을 역으로 import하지 않습니다.
+이 원칙이 자동으로 강제되는 것은 아니므로 새 의존성을 추가할 때 역방향 import를 확인합니다.
 기능 간에는 소유 기능의 명시적인 조회·업무 계약을 사용하며 다른 기능의 ORM 내부를 직접 조작하지 않습니다.
 
 ## 공통 기반과 후속 배치
