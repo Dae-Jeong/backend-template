@@ -3,11 +3,27 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "invalid",
+        "sqlite+aiosqlite:///:memory:",
+        "postgresql://localhost/db",
+        "sqlite+aiosqlite:///db?mode=memory",
+    ],
+)
+def test_database_url_rejects_unsupported_modes(url: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(db_primary_url=url)
 
 
 def test_environment_overrides_dotenv(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~4 및 6-1 완료 · 6-2/6-2M 진행 · Task 5 계약 초안 검토 필요 · 2026-09-08
+Status: Task 1~4 및 6-1/6-2 완료 · 6-2M 진행 · Task 5 계약 초안 검토 필요 · 2026-09-08
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -257,6 +257,12 @@ SQLite Primary 연결 기반과 연결 점유 계측을 함께 구현합니다.
 - DB 없는 앱은 DB 지표가 없으며, 계측 실패가 원래 DB 결과·예외를 바꾸지 않는 시험이 통과합니다.
 
 ### Task 6-2. Session과 업무 트랜잭션 계측
+
+Status: 완료 · 2026-09-08. 실제 파일 DB의 성공·중간 실패·지연 FK commit 실패·rollback 실패 주입,
+요청별 Session 격리·취소 후 반환·pool timeout 후 회복·SQLite 잠금 실패 구분을 검증했습니다.
+트랜잭션 소유권 예시는 `tests/dependencies/test_database.py`의 시험 업무이며 예약 API는 아직 없습니다.
+서비스는 `acquire_primary_connection`으로 획득하고 `record_transaction`으로 확정 결과를 기록합니다.
+자동 commit wrapper는 추가하지 않았습니다.
 
 목표:
 명시적 Session 제공과 업무 트랜잭션에 수명·획득·결과 계측을 연결합니다.

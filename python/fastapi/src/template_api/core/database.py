@@ -1,10 +1,20 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Any, cast
 
 from sqlalchemy import Connection, event
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.exc import TimeoutError
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import ConnectionPoolEntry
 
+from template_api.contracts.database import AcquisitionOutcome
 from template_api.core.database_metrics import DatabaseMetrics
 from template_api.core.settings import Settings
 
@@ -47,3 +57,36 @@ def create_primary_engine(settings: Settings, metrics: DatabaseMetrics) -> Async
             metrics.record(lambda: metrics.hold.observe(monotonic() - started))
 
     return engine
+
+
+@asynccontextmanager
+async def primary_session(
+    factory: async_sessionmaker[AsyncSession], metrics: DatabaseMetrics
+) -> AsyncIterator[AsyncSession]:
+    metrics.record(metrics.sessions.inc)
+    try:
+        async with factory() as session:
+            yield session
+    finally:
+        metrics.record(metrics.sessions.dec)
+
+
+async def acquire_primary_connection(
+    session: AsyncSession, metrics: DatabaseMetrics
+) -> AsyncConnection:
+    """Call once inside the outer business transaction, before its first SQL."""
+    if not session.in_transaction():
+        raise RuntimeError(
+            "Start the business transaction before acquiring a connection"
+        )
+    started = monotonic()
+    outcome = AcquisitionOutcome.FAILED
+    try:
+        connection = await session.connection()
+        outcome = AcquisitionOutcome.ACQUIRED
+        return connection
+    except TimeoutError:
+        outcome = AcquisitionOutcome.TIMEOUT
+        raise
+    finally:
+        metrics.record_acquisition(outcome, monotonic() - started)

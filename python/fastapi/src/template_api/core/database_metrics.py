@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from prometheus_client import Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
+from template_api.contracts.database import AcquisitionOutcome, TransactionOutcome
 from template_api.core.metrics import HttpMetrics
 
 
@@ -11,12 +12,32 @@ class DatabaseMetrics:
     owner: HttpMetrics
     connections: Gauge
     hold: Histogram
+    sessions: Gauge
+    acquisition: Histogram
+    timeouts: Counter
+    transactions: Counter
+    transaction_duration: Histogram
 
     def record(self, action: Callable[[], None]) -> None:
         try:
             action()
         except Exception:
             self.owner.failed = True
+
+    def record_acquisition(self, outcome: AcquisitionOutcome, seconds: float) -> None:
+        self.record(
+            lambda: self.acquisition.labels("primary", outcome.value).observe(seconds)
+        )
+        if outcome is AcquisitionOutcome.TIMEOUT:
+            self.record(self.timeouts.inc)
+
+    def record_transaction(self, outcome: TransactionOutcome, seconds: float) -> None:
+        self.record(lambda: self.transactions.labels("primary", outcome.value).inc())
+        self.record(
+            lambda: self.transaction_duration.labels("primary", outcome.value).observe(
+                seconds
+            )
+        )
 
 
 def create_database_metrics(owner: HttpMetrics, limit: int) -> DatabaseMetrics:
@@ -39,4 +60,43 @@ def create_database_metrics(owner: HttpMetrics, limit: int) -> DatabaseMetrics:
         labels,
         registry=owner.registry,
     ).labels(**labels).set(limit)
-    return DatabaseMetrics(owner, connections, hold)
+    sessions = Gauge(
+        "db_sessions_active",
+        "Sessions owned by the session provider.",
+        labels,
+        registry=owner.registry,
+    ).labels(**labels)
+    acquisition = Histogram(
+        "db_connection_acquire_seconds",
+        "Explicit connection acquisition including connect and validation costs.",
+        ("role", "outcome"),
+        registry=owner.registry,
+    )
+    timeouts = Counter(
+        "db_pool_timeouts_total",
+        "Pool timeouts at explicit connection acquisition.",
+        labels,
+        registry=owner.registry,
+    ).labels(**labels)
+    transactions = Counter(
+        "db_transactions_total",
+        "Business transaction outcomes after finalization.",
+        ("role", "outcome"),
+        registry=owner.registry,
+    )
+    duration = Histogram(
+        "db_transaction_duration_seconds",
+        "Business transaction duration including commit or rollback.",
+        ("role", "outcome"),
+        registry=owner.registry,
+    )
+    return DatabaseMetrics(
+        owner,
+        connections,
+        hold,
+        sessions,
+        acquisition,
+        timeouts,
+        transactions,
+        duration,
+    )
