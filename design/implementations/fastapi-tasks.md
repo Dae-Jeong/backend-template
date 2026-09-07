@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~4 로컬 구현 완료 · 다음 Task 5 예약 계약 합의 · 2026-09-07
+Status: Task 1~4 로컬 구현 완료 · 다음 Task 6-1 DB 연결 기반 · Task 5 계약 초안 검토 필요 · 2026-09-07
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -144,7 +144,8 @@ DB 없는 현재 단계에서는 `repositories/`를 생성하지 않습니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.
 설정과 검증 한계는 [로컬 모니터링](fastapi.md#로컬-모니터링)이 소유합니다.
 Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 검증 명세의 모든 항목 완료를 뜻하지 않습니다.
-다음은 Task 5 예약 계약 합의입니다. 실제 업무 충돌 코드·queue·운영 수집·로그 검색은 후속입니다.
+다음 실행은 업무 정책과 독립적인 Task 6-1 DB 연결 기반입니다. Task 5 예약 계약은 schema 구현 전에 확정합니다.
+실제 업무 충돌 코드·queue·운영 수집·로그 검색은 후속입니다.
 
 목표:
 기존 관측 계약을 구현하고 정상·실패·취소를 구분해 확인할 수 있게 합니다.
@@ -189,6 +190,7 @@ flowchart LR
 ## Task 6. 단일 Primary 예약 저장
 
 첫 구현 대상: 서버형 DB 대신 로컬 파일 SQLite입니다. DB 서버·공유 Postgres 변경은 하지 않습니다.
+이후 PostgreSQL로 전환하는 방향을 합의했습니다. 드라이버·DB별 연결 설정을 서비스와 분리하며 PostgreSQL 코드를 선행 구현하지 않습니다.
 연결 관리안은 표준 `sqlite3` 직접 사용 후보에서 SQLAlchemy AsyncEngine·aiosqlite 후보로 구체화했습니다.
 Engine·Session·트랜잭션 소유권과 첫 세부 task는 [DB 연결 기반 계획](fastapi.md#db-연결-기반-계획)이 소유합니다.
 실제 파일 기반 임시 DB와 독립 Session/연결로 검증합니다. 아직 DB 의존성·코드는 추가하지 않았습니다.
@@ -206,6 +208,36 @@ DB 선택과 격리 시험 대상, DB 생성·migration 범위는 실행 전에 
 - 실제 격리 DB에서 순차 예약·품절·rollback이 검증됩니다.
 - 예약과 수량 변경의 원자성, session 소유권과 pool 예산이 명시됩니다.
 - Replica·샤딩·범용 읽기 라우터 없이 단일 Primary로 동작합니다.
+
+### 다음 실행 단위
+
+기존 Task 번호를 유지하면서 작게 나눕니다. 각 행의 검증이 끝나면 task별 커밋·push 후 다음 단계로 넘어갑니다.
+Task 6-1/6-2는 예약 정책 확정 전에도 진행할 수 있으며, Task 6-3부터는 Task 5 합의가 필요합니다.
+현재 아래 항목은 모두 미구현입니다. 구체 파일·수명 계약은 [DB 연결 기반 계획](fastapi.md#db-연결-기반-계획)을 따릅니다.
+
+| 실행 순서 | Task | 작업 | 완료 기준 |
+| --- | --- | --- | --- |
+| 1 | 6-1 | SQLite Engine·설정·lifespan | uv 의존성 추가, DB URL/연결·대기 예산, 실제 파일 DB 연결, 시작 실패/종료 정리, 컨테이너 저장 경로·권한 확인 |
+| 2 | 6-2 | Session·DI·트랜잭션 | 요청별 Session 격리, 명시적 commit·실패 rollback, pool 획득 timeout·연결 반환 검증 |
+| 3 | 5 확정 | 예약·멱등 계약 | 성공·품절·키 범위·다른 입력 충돌·진행 중 중복·보존/실패 재시도 정책과 HTTP 응답 합의 |
+| 4 | 6-3 | 모델·Alembic migration | 수량·예약·키 저장에 필요한 schema와 제약, 새 임시 DB에 upgrade, 반복 실행·제약 위반 검증 |
+| 5 | 6-4 | 순차 예약 API | service/repository·업무 예외 연결, 성공·품절·중간 실패에서 차감과 예약의 원자성 검증 |
+| 6 | 7 | 서로 다른 요청의 동시성 | 독립 DB 연결에서 재고 1개에 성공 하나, 초과 예약·부분 변경 없음, 잠금 timeout 구분 |
+| 7 | 8-1 | 멱등 키·결과 영속화 | 같은 키·같은 입력은 기존 결과, 다른 입력은 충돌, 차감·예약·키 결과가 같은 트랜잭션 |
+| 8 | 8-2 | 동시 중복·응답 유실 | 같은 키 경합·rollback 후 재시도·commit 후 응답 유실/재시작을 검증하고 SQLite 1차 완료 판정 |
+| 후속 | 9 | PostgreSQL 전환 | 드라이버·연결 설정·migration·타입/제약/잠금 검토, 동일 업무 불변조건의 실제 PostgreSQL 재검증 |
+
+```mermaid
+flowchart LR
+    ENGINE["6-1 · Engine"] --> SESSION["6-2 · Session/DI"]
+    SESSION --> CONTRACT["5 · 예약 계약 확정"]
+    CONTRACT --> SCHEMA["6-3 · schema/migration"]
+    SCHEMA --> RESERVE["6-4 · 순차 예약"]
+    RESERVE --> RACE["7 · 서로 다른 요청 경합"]
+    RACE --> KEY["8-1 · 멱등 결과 저장"]
+    KEY --> RECOVERY["8-2 · 동시 중복/응답 유실"]
+    RECOVERY --> PG["9 · PostgreSQL 전환/재검증"]
+```
 
 ## Task 7. 서로 다른 요청의 경합
 
@@ -230,3 +262,11 @@ DB 선택과 격리 시험 대상, DB 생성·migration 범위는 실행 전에 
 
 트래픽 급증의 용량·지연 목표와 본격 부하 실험은 별도 합의합니다.
 동시성 시험 성공을 처리량 보장으로 설명하지 않으며 [Runtime Review](../runtime-review.md)를 따릅니다.
+
+## Task 9. PostgreSQL 전환
+
+SQLite에서 검증한 업무 불변조건을 유지하면서 PostgreSQL에 맞는 연결·schema·트랜잭션 동작을 검증합니다.
+URL 교체만으로 완료로 판단하지 않습니다. 실제 검증 대상은 머신 공통 DB 규칙에 맞는 격리 DB로 선정하며,
+DB 생성·migration 범위는 착수 시 확인합니다. 기존 SQLite 데이터 이관 여부도 이 단계에서 결정합니다.
+완료 기준은 migration·순차 처리·rollback·독립 연결 경합·멱등 재시도·응답 유실 시험의 PostgreSQL 통과입니다.
+SQLite 1차 완료와 PostgreSQL 검증 완료를 별도로 기록합니다.

@@ -394,9 +394,12 @@ p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저�
 
 ## DB 연결 기반 계획
 
-Status: SQLite 첫 실험의 Engine·Session 구성 제안 · 미구현 · 2026-09-07
+Status: SQLite 시작·PostgreSQL 후속 전환 계획 · 미구현 · 2026-09-07
 
 SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용하도록 제안합니다.
+Engine·Session·DI·트랜잭션 수명은 공통으로 유지하고 SQLite PRAGMA·연결 옵션은 DB별 설정에 한정합니다.
+PostgreSQL 전환 시 드라이버·migration·타입/제약·잠금을 검토하며 실제 DB에서 동시성·멱등성을 다시 검증합니다.
+세부 실행 순서와 완료 기준은 [Task 6 다음 실행 단위](fastapi-tasks.md#다음-실행-단위)가 소유합니다.
 aiosqlite는 연결별 백그라운드 스레드로 SQLite 작업을 처리하며 SQLite의 단일 writer 제약을 없애지는 않습니다.
 패키지는 `uv add`로 추가하고 lock·현재 Python 호환성을 확인합니다. ORM 모델·migration은 다음 세부 task입니다.
 
