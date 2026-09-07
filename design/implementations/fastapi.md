@@ -274,7 +274,7 @@ Status: 단일 API 이미지·Compose 구현 및 linux/arm64 검증 · 2026-09-0
 명령·접속 주소는 [사용 안내](../../python/fastapi/README.md#컨테이너-실행)가 소유합니다.
 `docker init`으로 생성한 Python 기본 파일을 기존 uv 프로젝트에 맞게 수정했습니다.
 
-Python 버전은 `.python-version`만 소유합니다. `local.sh` → Compose build args → Dockerfile 순서로 전달하며,
+Python 버전은 `.python-version`만 소유합니다. `scripts/compose.sh` → Compose build args → Dockerfile 순서로 전달하며,
 빌드·런타임은 같은 `python-base` 단계를 사용합니다. Python 이미지는 버전별 `slim-trixie` 태그로 선택하고
 digest는 고정하지 않습니다. uv 0.12.10 이미지는 버전·manifest digest로 고정합니다.
 `pyproject.toml`의 `requires-python`은 지원 범위이며 실행할 정확한 버전 선택과 구분합니다.

@@ -131,7 +131,7 @@ INFO 요약·ERROR 상세와 Uvicorn 중복 제외를 구현했습니다. APP_EN
 linux/arm64 실제 빌드·healthy·200/422·Swagger/metrics/JSON 로그·UID/dev/env 제외와 자원/로그 보관 설정을 확인했습니다.
 SIGTERM 종료 로그·OOM=false·exit 143과 재기동 healthy를 확인했습니다. 컨테이너 내 진행 요청 drain·부하·amd64·실제 로그 회전은 미검증입니다.
 모니터링 보완: 루트 Compose의 선택 profile에 Prometheus·Grafana를 추가하고 공식 file provisioning으로 대시보드를 등록했습니다.
-루트 `compose.yaml` 하나와 구현 선택용 `local.sh`를 사용하고 수집기·대시보드 설정은 `infra/monitoring/`에 둡니다.
+루트 `compose.yaml` 하나와 구현 선택용 `scripts/compose.sh`를 사용하고 수집기·대시보드 설정은 `infra/monitoring/`에 둡니다.
 Python 빌드 버전은 `.python-version`에서 읽어 전달하며 Dockerfile의 빌드·런타임 base를 공유합니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.
 설정과 검증 한계는 [로컬 모니터링](fastapi.md#로컬-모니터링)이 소유합니다.

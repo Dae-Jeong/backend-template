@@ -36,7 +36,7 @@ flowchart TB
 어떤 기능과 도구를 실제로 제공할지는 구현별 설계에서 정합니다. 공통 책임이 있다는 이유로 모든 계층이나 외부 시스템을 미리 만들지는 않습니다.
 
 `design/`는 설계 정본입니다. 다른 저장소의 아이디어를 추가로 찾아야 이해할 수 있는 구조로 만들지 않습니다.
-`compose.yaml` 하나가 로컬 실행을 정의하고, `local.sh`가 사용할 구현을 선택합니다.
+`compose.yaml` 하나가 로컬 실행을 정의하고, `scripts/compose.sh`가 사용할 구현을 선택합니다.
 `infra/monitoring/`은 Compose가 참조하는 수집기·대시보드 설정을 소유합니다.
 현재 연결·검증 범위는 [로깅과 관측](design/observability.md)에서 안내합니다.
 
@@ -47,13 +47,13 @@ flowchart TB
 로컬 컨테이너는 저장소 루트에서 실행합니다. 현재 선택 가능한 구현은 `fastapi`입니다.
 
 ```sh
-./local.sh fastapi up --build --wait
+./scripts/compose.sh fastapi up --build --wait
 # 모니터링도 함께 실행
-./local.sh fastapi --profile monitoring up --build --wait
+./scripts/compose.sh fastapi --profile monitoring up --build --wait
 # 모니터링만 중지
-./local.sh fastapi stop grafana prometheus
+./scripts/compose.sh fastapi stop grafana prometheus
 # 전체 중지, 보관 데이터 유지
-./local.sh fastapi --profile monitoring stop
+./scripts/compose.sh fastapi --profile monitoring stop
 ```
 
 스크립트는 구현을 선택한 뒤 나머지 인자를 Docker Compose에 전달합니다.

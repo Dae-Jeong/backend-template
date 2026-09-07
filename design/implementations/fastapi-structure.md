@@ -119,14 +119,18 @@ feature의 업무 이벤트·정책은 공통 로깅 기반을 사용하더라�
 
 DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.
 Dockerfile·빌드 context 허용 목록은 `python/fastapi/`에서 관리합니다.
-로컬 실행 정의는 루트 `compose.yaml` 하나가 소유하며 `local.sh`가 구현별 build 경로와 환경 예시를 선택합니다.
+로컬 실행 정의는 루트 `compose.yaml` 하나가 소유하며 `scripts/compose.sh`가 구현별 build 경로와 환경 예시를 선택합니다.
 API는 기본 실행하고 Prometheus·Grafana는 `monitoring` profile로 선택합니다.
 수집기 설정은 루트 `infra/monitoring/`에 둡니다. Java·Nest 선택지는 해당 구현을 만들 때 추가합니다.
+파일명은 도구가 정한 이름(`Dockerfile`, `compose.yaml`, `.python-version`, `prometheus.yml`)을 우선합니다.
+자체 실행 스크립트는 `scripts/compose.sh`, HTTP 대시보드는 `http-overview.json`,
+Grafana dashboard provider 설정은 `provisioning/dashboards/dashboards.yml`처럼 역할을 드러냅니다.
+이는 자체 파일의 명명 기준이며 Grafana가 해당 파일명을 강제하는 것은 아닙니다.
 공통 설정은 현재 FastAPI의 지표 계약으로 검증했으며 다른 구현에서 재사용할 때 지표 이름·라벨 호환성을 확인합니다.
 
 ```mermaid
 flowchart TD
-    ROOT["저장소 루트"] --> SELECT["local.sh · 구현 선택"]
+    ROOT["저장소 루트"] --> SELECT["scripts/compose.sh · 구현 선택"]
     VERSION[".python-version · 실행 Python 버전"] --> SELECT
     SELECT --> BASE["compose.yaml · API와 선택 monitoring profile"]
     BASE --> APP["python/fastapi/ · Dockerfile과 앱"]

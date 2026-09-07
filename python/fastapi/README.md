@@ -57,20 +57,20 @@ uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
 기존 uv 서버의 18080과 구분해 컨테이너는 **127.0.0.1:18081**로 게시합니다. 포트 점유를 먼저 확인합니다.
 
 ```sh
-../../local.sh fastapi config --quiet
-../../local.sh fastapi build
-../../local.sh fastapi up --wait --wait-timeout 60
-../../local.sh fastapi ps
+../../scripts/compose.sh fastapi config --quiet
+../../scripts/compose.sh fastapi build
+../../scripts/compose.sh fastapi up --wait --wait-timeout 60
+../../scripts/compose.sh fastapi ps
 curl -i 'http://127.0.0.1:18081/v1/greetings?name=Marin'
-../../local.sh fastapi logs -f api
+../../scripts/compose.sh fastapi logs -f api
 ```
 
 [컨테이너 Swagger](http://127.0.0.1:18081/docs), [readiness](http://127.0.0.1:18081/health/ready),
 [metrics](http://127.0.0.1:18081/metrics)에서 확인합니다. 로그 조회만 종료하려면 Ctrl+C입니다.
 
 ```sh
-../../local.sh fastapi stop api
-../../local.sh fastapi down
+../../scripts/compose.sh fastapi stop api
+../../scripts/compose.sh fastapi down
 ```
 
 `stop`은 컨테이너를 남겨두고 종료하며 `down`은 이 Compose 앱의 컨테이너·네트워크를 제거합니다.
@@ -89,7 +89,7 @@ flowchart LR
     RUN --> STOP["SIGTERM · lifespan 종료"]
 ```
 
-`local.sh`가 `.python-version`을 읽어 `PYTHON_VERSION` build argument로 전달합니다.
+`scripts/compose.sh`가 `.python-version`을 읽어 `PYTHON_VERSION` build argument로 전달합니다.
 Dockerfile의 공통 base를 빌드·런타임 단계에서 함께 사용합니다.
 Python 이미지는 해당 버전의 `slim-trixie` 태그이며 digest를 고정하지 않아 OS 이미지 갱신분은 달라질 수 있습니다.
 uv 이미지의 버전·digest는 Dockerfile에서 고정합니다. Python 갱신 시 lock 호환성과 컨테이너를 재검증합니다.
@@ -142,8 +142,8 @@ health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니�
 이 디렉터리에서 실행하며 13000·19090 포트가 비어 있는지 먼저 확인합니다.
 
 ```sh
-../../local.sh fastapi --profile monitoring up --wait --wait-timeout 90
-../../local.sh fastapi --profile monitoring exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
+../../scripts/compose.sh fastapi --profile monitoring up --wait --wait-timeout 90
+../../scripts/compose.sh fastapi --profile monitoring exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
 ```
 
 - [Grafana 대시보드](http://127.0.0.1:13000/d/backend-http-local): 로그인 없이 읽기 전용으로 조회합니다.
@@ -158,7 +158,7 @@ health·metrics·기본 Swagger/OpenAPI/ReDoc 조회는 집계하지 않습니�
 모니터링만 중지하려면 다음 명령을 실행합니다. named volume의 데이터는 유지합니다.
 
 ```sh
-../../local.sh fastapi --profile monitoring stop grafana prometheus
+../../scripts/compose.sh fastapi --profile monitoring stop grafana prometheus
 ```
 
 모든 게시 포트는 loopback이며 이 익명 Viewer 설정은 로컬 전용입니다.
