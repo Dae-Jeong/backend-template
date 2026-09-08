@@ -22,6 +22,9 @@ class LifecycleTest {
                 .run("--spring.datasource.url=", "--server.port=0");
                 var client = HttpClient.newHttpClient()) {
             assertThat(app.getBeansOfType(DataSource.class)).isEmpty();
+            assertThat(app.getBeansOfType(jakarta.persistence.EntityManagerFactory.class)).isEmpty();
+            assertThat(app.getBeansOfType(org.springframework.transaction.PlatformTransactionManager.class)).isEmpty();
+            assertThat(app.getBeansOfType(com.example.backendtemplate.repositories.ProductRepository.class)).isEmpty();
             int port = ((WebServerApplicationContext) app).getWebServer().getPort();
             for (String path : new String[]{"/health/live", "/health/ready", "/metrics", "/openapi.json"}) {
                 var response = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
@@ -31,6 +34,25 @@ class LifecycleTest {
             var reservation = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/v1/reservations"))
                     .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
             assertThat(reservation.statusCode()).isEqualTo(404);
+        }
+    }
+
+    @Test
+    void schemaMismatchFailsValidationWithoutRepairingSchema() throws Exception {
+        String url = "jdbc:h2:file:" + Files.createTempDirectory("spring-schema-mismatch-").resolve("db");
+        org.flywaydb.core.Flyway.configure().dataSource(url, "sa", "").load().migrate();
+        try (var connection = java.sql.DriverManager.getConnection(url, "sa", "");
+                var sql = connection.createStatement()) {
+            sql.execute("ALTER TABLE products ALTER COLUMN available VARCHAR(20)");
+        }
+        assertThatThrownBy(() -> new SpringApplicationBuilder(TemplateApplication.class).web(WebApplicationType.NONE)
+                .run("--spring.datasource.url=" + url))
+                .hasRootCauseInstanceOf(org.hibernate.tool.schema.spi.SchemaManagementException.class)
+                .hasStackTraceContaining("Schema validation: wrong column type");
+        try (var connection = java.sql.DriverManager.getConnection(url, "sa", "");
+                var columns = connection.getMetaData().getColumns(null, "PUBLIC", "PRODUCTS", "AVAILABLE")) {
+            assertThat(columns.next()).isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(java.sql.Types.VARCHAR);
         }
     }
 

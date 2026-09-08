@@ -12,6 +12,10 @@ spring:
   h2:
     console:
       enabled: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
   lifecycle:
     timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT_SECONDS:10}s
 server:

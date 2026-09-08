@@ -3,7 +3,7 @@ package com.example.backendtemplate;
 import com.example.backendtemplate.services.ReservationAttempts;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.TransactionExecution;
 import org.springframework.transaction.TransactionExecutionListener;
 import tools.jackson.databind.json.JsonMapper;
@@ -14,7 +14,7 @@ public class ProcessWorker {
         try (var app = new SpringApplicationBuilder(TemplateApplication.class).web(WebApplicationType.NONE)
                 .run("--spring.datasource.url=" + args[0], "--app.environment=test",
                         "--logging.level.root=ERROR", "--logging.level.com.example.backendtemplate=ERROR")) {
-            var manager = app.getBean(JdbcTransactionManager.class);
+            var manager = app.getBean(JpaTransactionManager.class);
             manager.addListener(new TransactionExecutionListener() {
                 @Override
                 public void beforeCommit(TransactionExecution transaction) {

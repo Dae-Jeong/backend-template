@@ -107,6 +107,17 @@ class TransactionFailureTest {
     }
 
     @Test
+    void rollbackBoundaryFailureCountsFailedAndDoesNotBecomeSuccess() throws Exception {
+        source.failRollback.set(true);
+        assertThatThrownBy(() -> app.getBean(CheckedWork.class).fail(false))
+                .isInstanceOf(org.springframework.orm.jpa.JpaSystemException.class);
+        unchanged();
+        assertThat(count("failed")).isEqualTo(1);
+        assertThat(count("rolled_back")).isZero();
+        assertThat(count("committed")).isZero();
+    }
+
+    @Test
     void checkedAndUncheckedFailuresRollbackThroughPublicProxy() throws Exception {
         var work = app.getBean(CheckedWork.class);
         assertThatThrownBy(() -> work.fail(true)).isInstanceOf(IOException.class);
@@ -123,6 +134,26 @@ class TransactionFailureTest {
         assertThat(failure.statusCode()).isEqualTo(500);
         assertThat(failure.body()).contains("INTERNAL_ERROR").doesNotContain("DATABASE_POOL_TIMEOUT", "private");
         assertThat(failure.headers().firstValue("Retry-After")).isEmpty();
+        unchanged();
+        assertThat(reserve().statusCode()).isEqualTo(201);
+    }
+
+    @Test
+    void unrelatedUniqueFlushFailureIsNotReplayedAsClaimCollision() throws Exception {
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+                var sql = connection.createStatement()) {
+            sql.execute("ALTER TABLE reservations ADD CONSTRAINT one_product UNIQUE(product_id)");
+            sql.execute("INSERT INTO reservations VALUES ('baseline', 'demo', '2026-09-08T00:00:00Z')");
+        }
+        var failure = reserve();
+        assertThat(failure.statusCode()).isEqualTo(500);
+        assertThat(failure.body()).contains("INTERNAL_ERROR");
+        assertThat(count("rolled_back")).isEqualTo(1);
+        assertThat(count("committed")).isZero();
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+                var sql = connection.createStatement()) {
+            sql.execute("DELETE FROM reservations WHERE id='baseline'");
+        }
         unchanged();
         assertThat(reserve().statusCode()).isEqualTo(201);
     }
@@ -174,6 +205,7 @@ class TransactionFailureTest {
         final HikariDataSource pool;
         final AtomicBoolean failCommit = new AtomicBoolean();
         final AtomicBoolean failBegin = new AtomicBoolean();
+        final AtomicBoolean failRollback = new AtomicBoolean();
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
 
@@ -187,6 +219,10 @@ class TransactionFailureTest {
             Connection connection = super.getConnection();
             return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
                     new Class<?>[]{Connection.class}, (proxy, method, args) -> {
+                        if (method.getName().equals("rollback") && failRollback.compareAndSet(true, false)) {
+                            connection.rollback();
+                            throw new SQLException("private synthetic rollback acknowledgement failure", "HY000");
+                        }
                         if (method.getName().equals("setAutoCommit") && Boolean.FALSE.equals(args[0])
                                 && failBegin.compareAndSet(true, false)) {
                             throw new SQLNonTransientConnectionException("private transaction begin failure", "08006");

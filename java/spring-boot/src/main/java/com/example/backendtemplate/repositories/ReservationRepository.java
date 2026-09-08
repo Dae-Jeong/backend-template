@@ -4,64 +4,66 @@ import com.example.backendtemplate.contracts.Reservation;
 import com.example.backendtemplate.exceptions.ReservationFailure;
 import com.example.backendtemplate.exceptions.ReservationFailure.Reason;
 import com.example.backendtemplate.exceptions.IdempotencyClaimed;
-import java.time.Instant;
+import jakarta.persistence.EntityManager;
 import java.util.Optional;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.annotation.Profile;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-import org.springframework.dao.DuplicateKeyException;
 
 @Repository
 @Profile("!no-db")
 public class ReservationRepository {
-    private final JdbcClient jdbc;
+    private final EntityManager entities;
+    private final ProductRepository products;
+    private final ReservationReplayRepository replays;
 
-    public ReservationRepository(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    public ReservationRepository(EntityManager entities, ProductRepository products, ReservationReplayRepository replays) {
+        this.entities = entities;
+        this.products = products;
+        this.replays = replays;
     }
 
     public void claim(String key) {
+        // Assigned IDs must INSERT, never merge an existing claim into a successful no-op.
+        entities.persist(new ReservationClaimEntity(key));
         try {
-            jdbc.sql("INSERT INTO reservation_claims(idempotency_key) VALUES (:key)").param("key", key).update();
-        } catch (DuplicateKeyException existingClaim) {
-            throw new IdempotencyClaimed();
+            entities.flush();
+        } catch (ConstraintViolationException failure) {
+            if ("23505".equals(failure.getSQLState()) && failure.getSQL() != null
+                    && failure.getSQL().contains("insert into reservation_claims")) {
+                throw new IdempotencyClaimed();
+            }
+            throw failure;
         }
     }
 
     public Optional<Reservation> replay(String key, String productId) {
-        return jdbc.sql("SELECT product_id, reservation_id, created_at FROM idempotency_keys WHERE idempotency_key = :key")
-                .param("key", key).query((rs, index) -> {
-                    if (!rs.getString("product_id").equals(productId)) {
-                        throw new ReservationFailure(Reason.IDEMPOTENCY_CONFLICT);
-                    }
-                    return new Reservation(rs.getString("reservation_id"), rs.getString("product_id"),
-                            Instant.parse(rs.getString("created_at")));
-                }).optional();
+        return replays.findByKey(key).map(row -> {
+            var value = row.toContract();
+            if (!value.productId().equals(productId)) throw new ReservationFailure(Reason.IDEMPOTENCY_CONFLICT);
+            return value;
+        });
     }
 
     public void decreaseStock(String productId) {
-        int changed = jdbc.sql("UPDATE products SET available = available - 1 WHERE id = :id AND available > 0")
-                .param("id", productId).update();
-        if (changed == 0) {
-            boolean exists = jdbc.sql("SELECT id FROM products WHERE id = :id").param("id", productId)
-                    .query(String.class).optional().isPresent();
-            throw new ReservationFailure(exists ? Reason.SOLD_OUT : Reason.PRODUCT_NOT_FOUND);
+        if (products.decreaseAvailableStock(productId) == 0) {
+            throw new ReservationFailure(products.existsById(productId) ? Reason.SOLD_OUT : Reason.PRODUCT_NOT_FOUND);
         }
     }
 
     public void save(Reservation reservation, String key) {
-        jdbc.sql("INSERT INTO reservations(id, product_id, created_at) VALUES (:id, :product, :created)")
-                .param("id", reservation.reservationId()).param("product", reservation.productId())
-                .param("created", reservation.createdAt().toString()).update();
-        jdbc.sql("INSERT INTO idempotency_keys(idempotency_key, product_id, reservation_id, created_at) VALUES (:key, :product, :id, :created)")
-                .param("key", key).param("product", reservation.productId())
-                .param("id", reservation.reservationId()).param("created", reservation.createdAt().toString()).update();
+        var product = entities.getReference(ProductEntity.class, reservation.productId());
+        var stored = new ReservationEntity(reservation, product);
+        entities.persist(stored);
+        entities.persist(new ReservationReplayEntity(key, reservation, stored));
+        // Flush is not completion; the Service proxy still owns commit and any rollback.
+        entities.flush();
     }
 
     public int seed(String productId, int stock) {
-        jdbc.sql("INSERT INTO products(id, available) SELECT :id, :stock WHERE NOT EXISTS (SELECT 1 FROM products WHERE id = :id)")
-                .param("id", productId).param("stock", stock).update();
-        return jdbc.sql("SELECT available FROM products WHERE id = :id").param("id", productId)
-                .query(Integer.class).single();
+        return products.findById(productId).map(ProductEntity::available).orElseGet(() -> {
+            entities.persist(new ProductEntity(productId, stock));
+            return stock;
+        });
     }
 }

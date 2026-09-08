@@ -39,11 +39,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             return problem(503, "DATABASE_BUSY", null, headers, request);
         }
         if ((error instanceof CannotCreateTransactionException || error instanceof CannotGetJdbcConnectionException)
-                && error.getCause() instanceof java.sql.SQLTransientConnectionException) {
+                && isPoolTimeout(error.getCause())) {
             headers.set("Retry-After", "1");
             return problem(503, "DATABASE_POOL_TIMEOUT", null, headers, request);
         }
         return problem(500, "INTERNAL_ERROR", null, headers, request);
+    }
+
+    private static boolean isPoolTimeout(Throwable cause) {
+        // JPA wraps connection acquisition in Hibernate JDBCConnectionException.
+        if (cause instanceof org.hibernate.exception.JDBCConnectionException jdbc) {
+            cause = jdbc.getSQLException();
+        }
+        return cause instanceof java.sql.SQLTransientConnectionException;
     }
 
     @Override

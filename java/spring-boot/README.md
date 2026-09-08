@@ -1,6 +1,6 @@
 # Spring Boot Backend Template
 
-Java 25 · Spring Boot 4.1.1 · Gradle Wrapper 9.7.1 · H2 2.4.240 · Flyway 12.4.0.
+Java 25 · Spring Boot 4.1.1 · Spring Data JPA 4.1.1 · Hibernate 7.4.5.Final · H2 2.4.240.
 Java major의 정본은 `.java-version`, 의존성의 정본은 Gradle 설정과 생성된 lockfile입니다.
 설계·시험 상세는 [Spring Boot 설계](../../design/implementations/spring-boot.md)를 봅니다.
 
@@ -39,6 +39,7 @@ java -jar build/libs/backend-template-0.0.1-SNAPSHOT.jar --seed --app.seed.produ
 ```
 
 Flyway가 시작 시 migration을 적용하고 실패하면 요청을 받지 않습니다.
+JPA는 schema를 검증하며 생성·수정하지 않습니다. 기존 V1/V2 H2 파일은 그대로 사용합니다.
 seed는 제품이 없을 때만 수량을 넣으며 기존 재고를 덮어쓰지 않습니다.
 embedded H2 파일은 한 JVM만 열 수 있으므로 **서버를 종료한 뒤 seed**합니다.
 H2 console은 제공하지 않습니다.
@@ -113,12 +114,13 @@ JUnit 결과는 `build/reports/tests/test/index.html`에서 확인합니다.
 H2 시험은 PostgreSQL·SQLite 잠금 검증이 아니며 PostgreSQL compatibility mode도 사용하지 않습니다.
 실제 디스크 고장·전원 차단·운영 부하·인증·외부 API·분산 transaction은 범위 밖입니다.
 
-HTTP DTO는 `dto/`, 내부 결과는 `contracts/`, 업무는 `services/`, SQL은 `repositories/`에 추가합니다.
+HTTP DTO는 `dto/`, 내부 결과는 `contracts/`, 업무는 `services/`, JPA entity·저장은 `repositories/`에 추가합니다.
+Entity를 Service·Controller의 계약으로 반환하지 않습니다. `open-in-view=false`이므로 필요한 조회·변환은 저장 경계 안에서 끝냅니다.
 쓰기 transaction은 public Service의 `@Transactional(rollbackFor = Exception.class)` proxy 경계에 둡니다.
 Controller는 proxy가 commit한 후 응답을 만들고 Repository는 commit하지 않습니다.
 예약의 unique claim 충돌 복구만 `ReservationAttempts`가 담당하며 무제한 자동 재시도는 없습니다.
 
 새 migration은 공식 Flyway CLI의 `help add`를 확인한 뒤 `flyway add`로 생성하고 SQL 본문을 편집합니다.
 기존 V1·V2를 수정하지 않고 다음 버전으로 추가합니다.
-의존성 변경 시에는 Gradle DSL을 편집한 뒤 `./gradlew test bootJar --write-locks`로 lockfile을 생성·검토합니다.
+의존성 변경 시 Gradle DSL을 편집한 뒤 `./gradlew dependencies --write-locks`로 lockfile을 생성·검토하고 전체 빌드를 실행합니다.
 일반 빌드는 strict lock으로 수행됩니다. Java compiler의 `-Xlint`·`-Werror`가 타입·compiler 경고를 검사합니다.
