@@ -2,7 +2,7 @@ spring:
   application:
     name: ${APP_NAME:backend-template-spring}
   datasource:
-    url: ${DB_PRIMARY_URL:jdbc:h2:file:./data/template;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=1000;WRITE_DELAY=0}
+    url: ${DB_PRIMARY_URL:}
     username: ${DB_USERNAME:sa}
     password: ${DB_PASSWORD:}
     hikari:
@@ -12,11 +12,6 @@ spring:
   h2:
     console:
       enabled: false
-  jackson:
-    deserialization:
-      fail-on-unknown-properties: true
-    mapper:
-      allow-coercion-of-scalars: false
   lifecycle:
     timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT_SECONDS:10}s
 server:
@@ -50,6 +45,11 @@ logging:
   structured:
     format:
       console: ecs
+    ecs:
+      service:
+        version: ${SERVICE_VERSION:0.0.1}
+    json:
+      customizer: com.example.backendtemplate.observation.SafeLoggingCustomizer
   level:
     root: WARN
     com.example.backendtemplate: ${LOG_LEVEL:INFO}

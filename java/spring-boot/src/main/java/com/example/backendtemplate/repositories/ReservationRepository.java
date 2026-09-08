@@ -3,11 +3,13 @@ package com.example.backendtemplate.repositories;
 import com.example.backendtemplate.contracts.Reservation;
 import com.example.backendtemplate.exceptions.ReservationFailure;
 import com.example.backendtemplate.exceptions.ReservationFailure.Reason;
+import com.example.backendtemplate.exceptions.IdempotencyClaimed;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.dao.DuplicateKeyException;
 
 @Repository
 @Profile("!no-db")
@@ -18,9 +20,12 @@ public class ReservationRepository {
         this.jdbc = jdbc;
     }
 
-    public void lockReservations() {
-        // One database row serializes reservation writes across connections/processes.
-        jdbc.sql("SELECT id FROM reservation_guard WHERE id = 1 FOR UPDATE").query(Integer.class).single();
+    public void claim(String key) {
+        try {
+            jdbc.sql("INSERT INTO reservation_claims(idempotency_key) VALUES (:key)").param("key", key).update();
+        } catch (DuplicateKeyException existingClaim) {
+            throw new IdempotencyClaimed();
+        }
     }
 
     public Optional<Reservation> replay(String key, String productId) {
@@ -54,7 +59,6 @@ public class ReservationRepository {
     }
 
     public int seed(String productId, int stock) {
-        lockReservations();
         jdbc.sql("INSERT INTO products(id, available) SELECT :id, :stock WHERE NOT EXISTS (SELECT 1 FROM products WHERE id = :id)")
                 .param("id", productId).param("stock", stock).update();
         return jdbc.sql("SELECT available FROM products WHERE id = :id").param("id", productId)

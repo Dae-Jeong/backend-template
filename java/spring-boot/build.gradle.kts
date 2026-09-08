@@ -9,7 +9,7 @@ version = "0.0.1-SNAPSHOT"
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(file(".java-version").readText().trim().toInt())
 	}
 }
 
@@ -46,4 +46,5 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+	systemProperty("test.runtimeClasspath", sourceSets.test.get().runtimeClasspath.asPath)
 }

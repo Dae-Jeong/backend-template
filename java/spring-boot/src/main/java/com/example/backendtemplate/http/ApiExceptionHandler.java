@@ -3,6 +3,7 @@ package com.example.backendtemplate.http;
 import com.example.backendtemplate.dto.FieldError;
 import com.example.backendtemplate.exceptions.ReservationFailure;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
@@ -29,8 +30,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    ResponseEntity<Object> unexpected(Exception error, HttpServletRequest request) {
+    ResponseEntity<Object> unexpected(Exception error, HttpServletRequest request, HttpServletResponse response) {
         request.setAttribute("error.type", error.getClass().getName());
+        if (response.isCommitted()) return null;
         HttpHeaders headers = new HttpHeaders();
         if (error instanceof CannotAcquireLockException || error instanceof QueryTimeoutException) {
             headers.set("Retry-After", "1");
@@ -48,13 +50,23 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         int code = status.value();
         if (code == 400) code = 422;
+        if (error.getCause() instanceof InvalidInput invalid) {
+            return problem(422, "INVALID_INPUT", invalid.errors(), headers,
+                    ((ServletWebRequest) request).getRequest());
+        }
         String name = switch (code) {
             case 422 -> "INVALID_INPUT";
             case 404 -> "NOT_FOUND";
             case 405 -> "METHOD_NOT_ALLOWED";
             default -> code >= 500 ? "INTERNAL_ERROR" : "HTTP_ERROR";
         };
-        return problem(code, name, code == 422 ? List.of(new FieldError(List.of(), "INVALID")) : null,
+        var location = List.<String>of();
+        if (error.getCause() instanceof tools.jackson.databind.DatabindException json
+                && json.getPath().size() == 1
+                && "product_id".equals(json.getPath().getFirst().getPropertyName())) {
+            location = List.of("body", "product_id");
+        }
+        return problem(code, name, code == 422 ? List.of(new FieldError(location, "INVALID")) : null,
                 headers, ((ServletWebRequest) request).getRequest());
     }
 

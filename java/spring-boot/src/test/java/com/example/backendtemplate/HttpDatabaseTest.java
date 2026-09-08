@@ -49,6 +49,7 @@ class HttpDatabaseTest {
         try (var connection = DriverManager.getConnection(url, "sa", "");
                 var sql = connection.createStatement()) {
             sql.executeUpdate("DELETE FROM idempotency_keys");
+            sql.executeUpdate("DELETE FROM reservation_claims");
             sql.executeUpdate("DELETE FROM reservations");
             sql.executeUpdate("DELETE FROM products");
             sql.executeUpdate("INSERT INTO products VALUES ('demo', 1), ('other', 1)");
@@ -119,11 +120,15 @@ class HttpDatabaseTest {
 
     @Test
     void rejectsMalformedStrictAndMissingInputs() throws Exception {
-        for (String body : List.of("{}", "{", "null", "{\"product_id\":3}",
+        for (String body : List.of("{}", "{", "null", "{\"product_id\":null}", "{\"product_id\":3}",
                 "{\"product_id\":\"\"}", "{\"product_id\":\"demo\",\"private\":1}")) {
             problem(request("POST", "/v1/reservations", body, "valid"), 422, "INVALID_INPUT");
         }
         problem(reserve(null, "demo"), 422, "INVALID_INPUT");
+        var nullProduct = json(request("POST", "/v1/reservations", "{\"product_id\":null}", "valid"));
+        assertThat(nullProduct.get("errors").get(0).get("code").asString()).isEqualTo("INVALID");
+        var missingProduct = json(request("POST", "/v1/reservations", "{}", "valid"));
+        assertThat(missingProduct.get("errors").get(0).get("code").asString()).isEqualTo("REQUIRED");
         problem(reserve("invalid key", "demo"), 422, "INVALID_INPUT");
         problem(reserve("valid", "missing"), 404, "PRODUCT_NOT_FOUND");
         assertThat(state()).containsExactly(1, 0, 0);
@@ -181,7 +186,7 @@ class HttpDatabaseTest {
         try (var connection = DriverManager.getConnection(url, "sa", "");
                 var sql = connection.createStatement()) {
             connection.setAutoCommit(false);
-            sql.executeQuery("SELECT id FROM reservation_guard WHERE id=1 FOR UPDATE").close();
+            sql.executeQuery("SELECT id FROM products WHERE id='demo' FOR UPDATE").close();
             var response = reserve("locked", "demo");
             problem(response, 503, "DATABASE_BUSY");
             assertThat(response.headers().firstValue("Retry-After")).contains("1");
@@ -203,6 +208,39 @@ class HttpDatabaseTest {
             for (var connection : held) connection.close();
         }
         assertThat(reserve("pool", "demo").statusCode()).isEqualTo(201);
+    }
+
+    @Test
+    void lockedProductDoesNotBlockIndependentProductAndKey() throws Exception {
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+                var sql = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            sql.executeQuery("SELECT id FROM products WHERE id='demo' FOR UPDATE").close();
+            assertThat(reserve("independent", "other").statusCode()).isEqualTo(201);
+            problem(reserve("blocked", "demo"), 503, "DATABASE_BUSY");
+            connection.rollback();
+        }
+        assertThat(reserve("blocked", "demo").statusCode()).isEqualTo(201);
+    }
+
+    @Test
+    void lostSocketResponseReplaysWithoutAnotherEffect() throws Exception {
+        var address = URI.create(base);
+        try (var socket = new java.net.Socket("127.0.0.1", address.getPort())) {
+            String body = "{\"product_id\":\"demo\"}";
+            String wire = "POST /v1/reservations HTTP/1.1\r\nHost: localhost\r\n"
+                    + "Content-Type: application/json\r\nIdempotency-Key: lost-socket\r\n"
+                    + "Content-Length: " + body.length() + "\r\nConnection: close\r\n\r\n" + body;
+            socket.getOutputStream().write(wire.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            socket.shutdownOutput();
+            // Deliberately discard every response byte while allowing the request to finish.
+            socket.getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
+        }
+        var retry = reserve("lost-socket", "demo");
+        assertThat(retry.statusCode()).isEqualTo(201);
+        assertThat(retry.headers().firstValue("Idempotency-Replayed")).contains("true");
+        assertThat(state()).containsExactly(0, 1, 1);
     }
 
     @Test

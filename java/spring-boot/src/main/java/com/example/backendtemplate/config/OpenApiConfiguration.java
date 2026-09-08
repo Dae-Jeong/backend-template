@@ -11,20 +11,24 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfiguration {
     @Bean
     OpenApiCustomizer problems() {
-        return api -> api.getPaths().forEach((path, item) -> {
+        return api -> {
+            io.swagger.v3.core.converter.ModelConverters.getInstance()
+                    .readAll(com.example.backendtemplate.dto.Problem.class)
+                    .forEach(api.getComponents()::addSchemas);
+            api.getPaths().forEach((path, item) -> {
             if (!path.startsWith("/v1/")) return;
             item.readOperations().forEach(operation -> {
-                for (String status : new String[]{"404", "405", "422", "500", "409", "503"}) {
+                var statuses = path.equals("/v1/reservations")
+                        ? new String[]{"404", "405", "422", "500", "409", "503"}
+                        : new String[]{"404", "405", "422", "500"};
+                for (String status : statuses) {
                     operation.getResponses().addApiResponse(status, new ApiResponse().description("Problem Details")
                             .content(new Content().addMediaType("application/problem+json",
                                     new io.swagger.v3.oas.models.media.MediaType().schema(
-                                            new Schema<>().type("object").addProperty("type", new Schema<>().type("string"))
-                                                    .addProperty("title", new Schema<>().type("string"))
-                                                    .addProperty("status", new Schema<>().type("integer"))
-                                                    .addProperty("code", new Schema<>().type("string"))
-                                                    .addProperty("request_id", new Schema<>().type("string"))))));
+                                            new Schema<>().$ref("#/components/schemas/Problem")))));
                 }
             });
-        });
+            });
+        };
     }
 }
