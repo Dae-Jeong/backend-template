@@ -22,8 +22,9 @@ Status: Task 1–8 구현·자동 검증 수행, 중앙 컨테이너 통합 확�
 
 - `27305d3`: 공식 Initializr 생성 결과 보존, 최초 Java 21 빌드.
 - `2d745e0`: Java 25·HTTP 계약·최초 H2 예약·실제 HTTP/file DB 시험.
-- 이후 변경: 중앙 리뷰의 전역 guard 제거·자동 no-db·Java 단일 정본·실패/프로세스/관측 검증.
-  최종 commit 목록은 검증 기록과 coordinator 보고에 기록합니다.
+- `a65cb26`: 중앙 리뷰의 전역 guard 제거·자동 no-db·Java 단일 정본·실패/프로세스/관측 검증,
+  clean 시험 27개 통과.
+  후속 문서 commit과 중앙 결과는 검증 기록 및 coordinator 보고에서 구분합니다.
 
 V1의 초기 guard는 V2 migration에서 제거합니다. 과거 migration을 지우거나 덮어쓰지 않고
 기존 예약·재생 결과를 보존한 업그레이드를 시험했습니다.

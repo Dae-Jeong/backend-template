@@ -1,7 +1,7 @@
 # Spring Boot Backend Template
 
 Java 25 · Spring Boot 4.1.1 · Gradle Wrapper 9.7.1 · H2 2.4.240 · Flyway 12.4.0.
-Java major의 정본은 [.java-version](.java-version), 의존성의 정본은 Gradle 설정과 생성된 lockfile입니다.
+Java major의 정본은 `.java-version`, 의존성의 정본은 Gradle 설정과 생성된 lockfile입니다.
 설계·시험 상세는 [Spring Boot 설계](../../design/implementations/spring-boot.md)를 봅니다.
 
 ## 빌드와 DB 없는 실행
@@ -79,7 +79,7 @@ DB transaction 지표는 실제 완료 callback에서 기록하며 재생·seed 
 
 ## 환경과 컨테이너
 
-[.env.example](.env.example)은 Compose용 입력 예시입니다.
+`.env.example`은 Compose용 입력 예시입니다.
 Boot와 start script는 이 파일을 자동으로 읽지 않습니다. native 실행에서는 셸 환경으로 전달합니다.
 앱별 설정은 `APP_NAME`, `SERVICE_VERSION`, `APP_ENVIRONMENT`, `LOG_LEVEL`,
 `SERVER_HOST`, `SERVER_PORT`, `SHUTDOWN_TIMEOUT_SECONDS`입니다.

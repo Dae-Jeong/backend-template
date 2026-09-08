@@ -29,6 +29,15 @@ cd java/spring-boot
 ```
 
 Java compiler `-Xlint:all,-processing,-serial`·`-Werror`와 strict dependency locking을 포함합니다.
+구현 commit `a65cb26` 기준 clean 빌드는 **27개 시험·10 suites·실패 0·오류 0**으로 통과했습니다.
+마지막 코드 수정 `53db988`은 아래 명령으로 영향받는 **HTTP·transaction 14개 시험·실패 0**과 bootJar를 확인했습니다.
+
+```sh
+./gradlew test --tests '*TransactionFailureTest' --tests '*HttpDatabaseTest' bootJar --no-daemon --console=plain
+```
+
+실제 pool 포화는 503이고 setAutoCommit 단계의 비일시 연결 실패는 500·INTERNAL_ERROR이며 Retry-After가 없음을 검사했습니다.
+마지막 수정 후 전체 프로세스 시험을 다시 실행한 것으로 표시하지 않습니다.
 테스트 결과는 `build/reports/tests/test/index.html`, JUnit XML은 `build/test-results/test/`입니다.
 lockfile 생성은 공식 `./gradlew test bootJar --write-locks`로 수행했습니다.
 migration 파일은 공식 `flyway help add` 확인 후 `flyway add -add.version=1|2 -add.timestamp=never ...`로 만들었습니다.
@@ -82,6 +91,29 @@ Docker locked 빌드는 통과했습니다. JAVA_VERSION 기본값을 두지 않
 InvalidDefaultArgInFrom 경고 2개가 있으며 실제 명령은 필수 arg를 전달합니다.
 이미지는 curl healthcheck·UID10001·/app/data·내부8080을 사용합니다.
 중앙 Compose의 127.0.0.1:18086 실행·수집기 확인 결과는 중앙 통합 보고와 구분합니다.
+
+`a65cb26` 구현 이미지 manifest는 `sha256:898234f975f4901933b91c4d2c9c47cba6176d91eacb3b21def9557cfeee779b`입니다.
+이후 `53db988`의 오류 번역 수정은 중앙 Compose 이미지 재빌드·실행 대상으로 전달했습니다.
+`git archive a65cb26 java/spring-boot`를 `/tmp/spring-template-copy-a65cb26/`에 풀어
+새 위치에서 `./gradlew bootJar --no-daemon --console=plain`을 실행해 통과했습니다.
+복사한 start.sh를 독립 임시 포트 57097에서 실행해 DB 비활성 readiness 200·인사 응답·예약 404를 확인했습니다.
+
+이 checkout의 `uv tool run --from uv==0.12.10 uv run --project docs --locked mkdocs build --strict --site-dir /tmp/spring-docs-site`는
+Spring 설계 4개가 참조하는 `java/spring-boot/README.md`를 기존 중앙 hook이 아직 발행하지 않아
+링크 경고 4개로 실패했습니다. 공통 `docs/hooks.py`·`mkdocs.yml`은 worker 소유가 아니므로 변경하지 않았고
+README 발행·탐색 연결과 통합 strict build를 중앙에 전달했습니다.
+
+## 구현 commit
+
+| commit | 내용 |
+| --- | --- |
+| 27305d3 | Initializr 생성·Java 21 최초 기반 |
+| 2d745e0 | Java 25·HTTP·H2 최초 예약과 실제 HTTP 시험 |
+| a65cb26 | 키별 claim·자동 no-db·중앙 리뷰·실패/복구/수명/관측 시험·실행 안내 |
+| 73af314 | clean 27개·복사 빌드/실행·중앙 MkDocs hook 미통합 기록 |
+| 53db988 | 실제 pool timeout과 비일시 transaction 시작 실패의 HTTP 번역 분리 |
+
+후속 문서 commit은 위 구현 결과와 중앙 통합 확인을 기록하며 코드 revision과 구분합니다.
 
 ## 실제 metrics 대응
 
