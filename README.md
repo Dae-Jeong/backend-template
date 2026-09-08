@@ -18,6 +18,43 @@ FastAPI·SQLite, NestJS·SQLite, Spring Boot·H2 구현을 제공합니다.
 | `compose.yaml` · `scripts/compose.sh` | 구현을 선택해 로컬 컨테이너 실행 |
 | `infra/monitoring/` · `docs/` | Prometheus·Grafana 설정과 MkDocs 도구 환경 |
 
+## 로컬 앱 실행
+
+Docker가 실행된 환경에서 **저장소 루트**에서 사용할 구현의 명령을 선택합니다.
+세 명령은 같은 `compose.yaml`을 사용하고 구현별로 다른 Compose 프로젝트·포트·데이터 volume을 사용합니다.
+
+```sh
+./scripts/compose.sh fastapi up --build --wait api
+./scripts/compose.sh nestjs up --build --wait api
+./scripts/compose.sh spring-boot up --build --wait api
+```
+
+| 구현 | Docker Swagger | 네이티브 기본 포트 |
+| --- | --- | --- |
+| FastAPI | [18081/docs](http://127.0.0.1:18081/docs) | 18080 |
+| NestJS | [18084/docs](http://127.0.0.1:18084/docs) | 18083 |
+| Spring Boot | [18086/docs](http://127.0.0.1:18086/docs) | 18085 |
+
+DB URL을 설정하지 않으면 인사·health·docs·metrics만 활성화합니다.
+예약을 사용하려면 구현별 가이드의 DB 설정·migration·seed 순서를 따릅니다.
+종료는 같은 구현 이름으로 `./scripts/compose.sh fastapi stop api`처럼 실행하며 데이터는 유지합니다.
+모니터링은 선택 사항이며 [공유 수집기 실행 안내](design/implementations/local-monitoring.md)를 따릅니다.
+
+### Compose와 스크립트의 역할
+
+| 파일 | 책임 |
+| --- | --- |
+| 루트 `compose.yaml` | API·선택 모니터링 서비스, 포트·볼륨·자원 설정 |
+| 루트 `scripts/compose.sh` | 구현 선택, 버전 파일·빌드 경로·포트·환경 파일을 Compose에 전달 |
+| 각 구현의 `Dockerfile` | 해당 언어로 이미지 빌드와 컨테이너 진입점 정의 |
+| FastAPI·NestJS의 `scripts/start.sh` | DB 활성 시 migration을 적용한 뒤 앱 실행 |
+| Spring Boot의 `scripts/start.sh` | 네이티브 JAR 실행. 컨테이너는 Dockerfile에서 JAR를 직접 실행하며 Flyway는 앱 시작 시 적용 |
+
+Compose의 기본 환경 파일은 각 구현의 `.env.example`이며 별도 파일은 `BACKEND_ENV_FILE`로 지정합니다.
+네이티브 설치·빌드·실행은 각 구현의 uv·pnpm·Gradle 명령을 사용합니다.
+구체적인 명령은 [FastAPI](python/fastapi/README.md) · [NestJS](ts/nestjs/README.md) ·
+[Spring Boot](java/spring-boot/README.md)에 있습니다.
+
 ## 구조와 패턴
 
 역할별 폴더 안에서 기능별 파일을 맞춥니다. 아래는 세 구현이 공유하는 책임 흐름이며,
