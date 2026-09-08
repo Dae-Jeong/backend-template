@@ -69,6 +69,8 @@ services:
     ports:
       - "127.0.0.1:13000:3000"
     environment:
+      # Go GC 예산에 여유를 두어 컨테이너 512 MiB 한도와 구분합니다.
+      GOMEMLIMIT: 384MiB
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_AUTH_DISABLE_LOGIN_FORM: "true"

@@ -54,6 +54,7 @@ export class DatabaseMetrics {
       labelNames: ['role'],
       registers,
     });
+    this.timeouts.labels('primary').inc(0);
     this.transactions = new Counter({
       name: 'db_transactions_total',
       help: 'Business transactions after finalization.',
