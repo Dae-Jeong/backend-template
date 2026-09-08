@@ -3,7 +3,7 @@ package com.example.backendtemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.profiles.active=no-db")
 class TemplateApplicationTests {
 
 	@Test

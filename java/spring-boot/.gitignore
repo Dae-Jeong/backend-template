@@ -1,4 +1,9 @@
 HELP.md
+data/
+.env
+*.mv.db
+*.trace.db
+*.lock.db
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
