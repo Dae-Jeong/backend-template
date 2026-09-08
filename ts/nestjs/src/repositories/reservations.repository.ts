@@ -1,0 +1,97 @@
+import { Injectable } from '@nestjs/common';
+import { and, eq, gt, sql } from 'drizzle-orm';
+import type { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
+import {
+  products,
+  reservations,
+  idempotencyKeys,
+} from '../models/reservations.schema.js';
+import type { Reservation } from '../contracts/reservations.contract.js';
+import {
+  ProductNotFound,
+  SoldOut,
+  IdempotencyConflict,
+} from '../exceptions/reservations.error.js';
+
+export type ReservationClient = Pick<
+  SqliteRemoteDatabase,
+  'select' | 'insert' | 'update'
+>;
+
+@Injectable()
+export class ReservationsRepository {
+  async replay(
+    client: ReservationClient,
+    key: string,
+    productId: string,
+  ): Promise<Reservation | undefined> {
+    const [existing] = await client
+      .select()
+      .from(idempotencyKeys)
+      .where(eq(idempotencyKeys.key, key));
+    if (!existing) return undefined;
+    if (existing.productId !== productId) throw new IdempotencyConflict();
+    return {
+      reservationId: existing.response.reservation_id,
+      productId: existing.response.product_id,
+      createdAt: new Date(existing.response.created_at),
+    };
+  }
+  async decreaseStock(
+    client: ReservationClient,
+    productId: string,
+  ): Promise<void> {
+    const changed = await client
+      .update(products)
+      .set({ available: sql`${products.available} - 1` })
+      .where(and(eq(products.id, productId), gt(products.available, 0)))
+      .returning({ id: products.id });
+    if (changed.length) return;
+    const existing = await client
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.id, productId));
+    if (!existing.length) throw new ProductNotFound();
+    throw new SoldOut();
+  }
+  async saveReservation(
+    client: ReservationClient,
+    reservation: Reservation,
+  ): Promise<void> {
+    await client
+      .insert(reservations)
+      .values({
+        id: reservation.reservationId,
+        productId: reservation.productId,
+        createdAt: reservation.createdAt.toISOString(),
+      });
+  }
+  async saveIdempotency(
+    client: ReservationClient,
+    key: string,
+    reservation: Reservation,
+  ): Promise<void> {
+    await client
+      .insert(idempotencyKeys)
+      .values({
+        key,
+        productId: reservation.productId,
+        reservationId: reservation.reservationId,
+        response: {
+          reservation_id: reservation.reservationId,
+          product_id: reservation.productId,
+          created_at: reservation.createdAt.toISOString(),
+        },
+      });
+  }
+  async seed(
+    client: ReservationClient,
+    productId: string,
+    available: number,
+  ): Promise<void> {
+    await client
+      .insert(products)
+      .values({ id: productId, available })
+      .onConflictDoNothing();
+  }
+}

@@ -6,5 +6,7 @@ import type { Greeting } from '../contracts/greetings.contract.js';
 @Injectable()
 export class GreetingsService {
   constructor(@Inject(CLOCK) private readonly clock: Clock) {}
-  greet(name: string): Greeting { return { message: `Hello, ${name}!`, generatedAt: this.clock() }; }
+  greet(name: string): Greeting {
+    return { message: `Hello, ${name}!`, generatedAt: this.clock() };
+  }
 }

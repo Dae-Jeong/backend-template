@@ -7,5 +7,9 @@ async function bootstrap() {
   app.enableShutdownHooks(['SIGTERM', 'SIGINT']);
   await listen(app, settings.port, settings.host);
 }
-try { await bootstrap(); }
-catch { process.stderr.write('{"message":"application.start_failed"}\n'); process.exitCode = 1; }
+try {
+  await bootstrap();
+} catch {
+  process.stderr.write('{"message":"application.start_failed"}\n');
+  process.exitCode = 1;
+}
