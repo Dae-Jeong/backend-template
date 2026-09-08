@@ -3,7 +3,7 @@
 예약 요청 하나를 따라가며 **코드가 하는 일 → 내부에서 일어나는 일 → 그렇게 작성한 이유**를 설명합니다.
 실행 명령은 [사용 안내](../../java/spring-boot/README.md), API·DB 정책과 구현 제약은
 [구현 설계](spring-boot.md), 파일 배치는 [폴더와 역할](spring-boot-structure.md)이 소유합니다.
-아래 클래스는 `src/main/java/com/example/backendtemplate/`에 있습니다.
+아래 클래스는 `src/main/java/com/backendtemplate/`에 있습니다.
 
 ## 객체 주입과 요청별 상태
 

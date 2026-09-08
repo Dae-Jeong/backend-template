@@ -18,7 +18,7 @@ flowchart LR
     OBS["observation"] -. 완료 계측 .-> A
 ```
 
-아래 경로는 `java/spring-boot/src/main/java/com/example/backendtemplate/` 기준입니다.
+아래 경로는 `java/spring-boot/src/main/java/com/backendtemplate/` 기준입니다.
 
 | 파일·영역 | 실제 책임 |
 | --- | --- |

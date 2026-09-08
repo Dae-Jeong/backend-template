@@ -1,0 +1,48 @@
+package com.backendtemplate.services;
+
+import com.backendtemplate.contracts.Reservation;
+import com.backendtemplate.contracts.ReservationResult;
+import com.backendtemplate.repositories.ReservationRepository;
+import java.time.Clock;
+import java.util.UUID;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Profile("!no-db")
+public class ReservationService {
+    private final ReservationRepository repository;
+    private final Clock clock;
+
+    public ReservationService(ReservationRepository repository, Clock clock) {
+        this.repository = repository;
+        this.clock = clock;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ReservationResult reserve(String productId, String key) {
+        var replay = repository.replay(key, productId);
+        if (replay.isPresent()) {
+            return new ReservationResult(replay.get(), true);
+        }
+        repository.claim(key);
+        repository.decreaseStock(productId);
+        var reservation = new Reservation(UUID.randomUUID().toString().replace("-", ""), productId, clock.instant());
+        repository.save(reservation, key);
+        return new ReservationResult(reservation, false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public int seed(String productId, int stock) {
+        if (stock < 0) {
+            throw new IllegalArgumentException("Stock must be nonnegative");
+        }
+        return repository.seed(productId, stock);
+    }
+
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public ReservationResult replay(String productId, String key) {
+        return new ReservationResult(repository.replay(key, productId).orElseThrow(), true);
+    }
+}

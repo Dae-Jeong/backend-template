@@ -53,10 +53,10 @@ logging:
       service:
         version: ${SERVICE_VERSION:0.0.1}
     json:
-      customizer: com.example.backendtemplate.observation.SafeLoggingCustomizer
+      customizer: com.backendtemplate.observation.SafeLoggingCustomizer
   level:
     root: WARN
-    com.example.backendtemplate: ${LOG_LEVEL:INFO}
+    com.backendtemplate: ${LOG_LEVEL:INFO}
 springdoc:
   api-docs:
     path: /openapi.json
