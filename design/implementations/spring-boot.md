@@ -1,6 +1,31 @@
 # Java / Spring Boot 구현 설계
 
-Status: Task 1–8 구현·검증 진행 결과 반영 · 2026-09-08
+Status: Task 1–8 완료 · Task 9 JPA 전환 승인·구현 중 · 2026-09-08
+
+## Task 9 승인 설계
+
+Boot 관리 `starter-data-jpa`·Hibernate와 단일 `JpaTransactionManager`를 사용합니다.
+Flyway V1/V2와 기존 H2 파일을 그대로 유지하며 `ddl-auto=validate`, `open-in-view=false`로 실행합니다.
+저장 entity는 repositories 경계 안에 두고 Service의 입력·출력은 기존 contract를 유지합니다.
+Product 조회·존재 확인과 replay는 Spring Data repository, 신규 claim·예약·결과는 entity persist로 처리합니다.
+할당 ID의 merge가 중복 claim을 정상 갱신으로 바꾸지 않도록 claim은 persist 후 즉시 flush합니다.
+이 flush의 claim INSERT unique violation만 IdempotencyClaimed로 번역합니다.
+실패 transaction을 proxy가 rollback한 다음 ReservationAttempts가 새 proxy transaction으로 replay합니다.
+조건부 JPQL UPDATE는 flushAutomatically·clearAutomatically를 적용하여 기존 managed Product가 오래된 재고를 덮어쓰지 않게 합니다.
+예약과 결과의 FK association으로 INSERT 순서를 표현하고 결과 저장 flush 실패도 전체 rollback합니다.
+UTC Instant는 VARCHAR converter로 기존 timestamp 표현과 응답을 보존합니다.
+실제 transaction listener·commit 실패 rollback 설정은 JPA manager로 옮깁니다.
+
+```mermaid
+flowchart LR
+    S[Service public transaction] --> R[ReservationRepository]
+    R --> D[Spring Data 조회와 조건부 JPQL]
+    R --> E[EntityManager persist와 flush]
+    D --> H[Hibernate / 단일 JpaTransactionManager]
+    E --> H
+    H --> DB[기존 H2 V1/V2 schema]
+    F[Flyway] --> DB
+```
 
 공통 계약은 [Backend](../backend.md), [개발 원칙](../engineering.md),
 [관측](../observability.md)이 소유합니다. 실행 명령은 [구현 README](../../java/spring-boot/README.md),

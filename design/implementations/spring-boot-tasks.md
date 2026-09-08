@@ -28,3 +28,16 @@ Status: Task 1–8 1차 구현·검증 완료 · 컨테이너·공유 수집·�
 V1의 초기 guard는 V2 migration에서 제거합니다. 과거 migration을 지우거나 덮어쓰지 않고
 기존 예약·재생 결과를 보존한 업그레이드를 시험했습니다.
 공통 실행·수집·문서 메뉴는 main에 통합했습니다.
+
+## Task 9. Spring Data JPA·Hibernate 전환
+
+목표:
+Java 구현의 JdbcClient 저장 경계를 JPA entity·Spring Data repository로 전환하고 기존 H2 데이터·HTTP·transaction 계약을 보존합니다.
+
+예상 결과:
+- 승인 설계가 spring-boot.md에 기록되고 Flyway V1/V2 변경 없이 schema validate가 동작함.
+- 단일 JpaTransactionManager·public Service 경계·실제 완료 metrics와 좁은 claim 충돌 복구가 구현됨.
+- stale entity·flush/commit 실패 rollback·unique race·기존 데이터·no-db 시험 및 strict locked clean test bootJar가 통과함.
+- Spring 사용/구조/검증 문서에 실제 결과와 중앙 Docker·수집 검증의 남은 범위가 기록됨.
+
+Status: 구현 중. 공유 파일·Docker18086·영속 기존 데이터·Prometheus 최종 확인은 중앙 통합 담당입니다.
