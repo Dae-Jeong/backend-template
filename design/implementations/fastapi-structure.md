@@ -1,6 +1,6 @@
 # FastAPI 폴더 구조와 활용 기준
 
-Status: 역할별 배치 적용 · 2026-09-07
+Status: 역할별 배치·예약 저장 적용 · 2026-09-08
 
 이 문서는 FastAPI 구현의 폴더·파일 역할과 배치 선택을 소유합니다.
 공통 책임 계약은 [Backend](../backend.md), 개발 판단은 [개발 원칙](../engineering.md),
@@ -20,19 +20,23 @@ DI 조립은 [DI 설계](fastapi-di-options.md)가 소유합니다.
 ## 현재 실제 구조
 
 아래 경로는 `python/fastapi/` 기준입니다. `src/`와 `tests/`는 같은 레벨입니다.
-DB Engine·Session 기반은 있으며 업무 저장은 아직 없어 `repositories/`·ORM 모델·migration 폴더는 만들지 않습니다.
+예약의 HTTP·업무·저장·내부 계약을 역할별로 구분합니다. DB 모델은 SQLAlchemy Core Table이며 ORM Base는 없습니다.
 
 ```mermaid
 flowchart TD
     PROJECT["python/fastapi/"] --> SRC["src/template_api/"]
     PROJECT --> TESTS["tests/ · 기능 시나리오와 책임별 검증"]
+    PROJECT --> MIGRATIONS["migrations/ · env.py · versions/"]
     SRC --> RUN["run.py · 프로세스 실행"]
+    SRC --> SEED["seed.py · 로컬 상품 생성 CLI"]
     SRC --> BOOT["bootstrap/ · app.py · contracts.py · lifespan.py"]
-    SRC --> ROUTERS["routers/ · index.py · greetings.py · health.py · metrics.py"]
-    SRC --> SERVICES["services/ · greetings.py"]
-    SRC --> SCHEMAS["schemas/ · greetings.py · responses.py"]
-    SRC --> CONTRACTS["contracts/ · greetings.py · database.py"]
-    SRC --> EXCEPTIONS["exceptions/ · application.py"]
+    SRC --> ROUTERS["routers/ · index.py · greetings.py · reservations.py · health.py · metrics.py"]
+    SRC --> SERVICES["services/ · greetings.py · reservations.py"]
+    SRC --> REPOS["repositories/ · reservations.py"]
+    SRC --> MODELS["models/ · reservations.py"]
+    SRC --> SCHEMAS["schemas/ · greetings.py · reservations.py · responses.py"]
+    SRC --> CONTRACTS["contracts/ · greetings.py · reservations.py · database.py"]
+    SRC --> EXCEPTIONS["exceptions/ · application.py · reservations.py · database.py"]
     SRC --> DEP["dependencies/ · clock.py · database.py"]
     SRC --> HTTP["http/ · errors.py · observation.py"]
     SRC --> CORE["core/ · settings.py · clock.py · contracts.py · logging.py · metrics.py"]
@@ -60,7 +64,15 @@ flowchart TD
 | `core/settings.py`, `core/clock.py` | 환경 설정과 UTC 시간 공급 구현입니다. |
 | `core/contracts.py` | Clock·관측 결과·로그 문맥 등 공통 기반 계약입니다. |
 | `core/logging.py`, `core/metrics.py` | JSON 로그 출력과 Prometheus registry·지표 기록입니다. |
-| `tests/` | 현재 인사 시나리오·설정·수명·HTTP·로그·metrics 검증입니다. 소스와 일대일 폴더 대응을 강제하지 않습니다. |
+| `routers/reservations.py`, `schemas/reservations.py` | 예약 HTTP 입력 검증·응답 변환·멱등 헤더입니다. |
+| `services/reservations.py` | 업무 순서·트랜잭션·재생·실패 분류를 소유합니다. |
+| `repositories/reservations.py` | 조건부 차감·예약/키 저장·결과 조회 SQL입니다. commit하지 않습니다. |
+| `models/reservations.py` | Core Table·DB 제약·metadata입니다. 외부 요청 schema와 구분합니다. |
+| `contracts/reservations.py` | 불변 업무 결과 타입입니다. HTTP·저장 구현을 import하지 않습니다. |
+| `exceptions/reservations.py`, `exceptions/database.py`, `http/database.py` | 업무/DB 실패 타입과 HTTP 503 변환을 구분합니다. |
+| `migrations/`, `alembic.ini` | 공식 Alembic async scaffold 기반 schema 변경입니다. 앱 시작 시 자동 적용하지 않습니다. |
+| `seed.py` | 없는 상품만 생성하는 로컬 CLI입니다. 기존 재고를 초기화하지 않습니다. |
+| `tests/` | 기반·예약·경합·복구 시험입니다. `reservations/process_worker.py`는 독립 프로세스/강제 종료 대역입니다. 소스와 일대일 대응을 강제하지 않습니다. |
 
 `http/`는 HTTP 전반의 오류 처리·관측을 소유하고, 모든 endpoint는 `routers/`에 둡니다.
 `bootstrap/`은 실행할 앱을 연결하는 곳이며 업무 계층이 아닙니다.
@@ -82,9 +94,8 @@ flowchart LR
 화살표는 import 방향입니다. service는 router·Depends·외부 응답 스키마를 import하지 않습니다.
 계약은 구현을 역으로 import하지 않으며 package `__init__.py`에서 구현을 재노출하지 않습니다.
 
-DB를 도입하면 `repositories/reservations.py`처럼 저장 역할을 추가합니다.
-기본 업무 호출은 router → service → repository이고, 구체 저장 구현을 어떻게 주입할지는 해당 task에서 정합니다.
-ORM 모델은 저장 역할에, 외부 요청·응답 모델은 `schemas/`, 내부 업무 타입은 `contracts/`에 둡니다.
+예약 호출은 router → service → repository입니다. Session·metrics·clock은 명시적 인자로 전달합니다.
+DB Table은 `models/`, 외부 요청·응답 모델은 `schemas/`, 내부 업무 타입은 `contracts/`에 둡니다.
 같은 필드를 가진다는 이유만으로 모든 타입과 변환 함수를 미리 만들지는 않습니다.
 설정·의존성·자원 수명은 기존 명시적 DI 계약을 유지합니다.
 업무 예외의 정의·등록·응답 매핑은 [업무 예외 처리](fastapi.md#업무-예외-처리)가 소유합니다.
@@ -113,7 +124,7 @@ A → B → A가 생기면 조합 서비스가 필요한 데이터를 구해 각
 
 ## 실행 설정과 후속 배치
 
-DB migration 경로는 도구 선택 후 공식 초기화 명령으로 생성합니다.
+DB migration은 공식 `alembic init -t async migrations`와 `alembic revision`으로 생성한 경로를 사용합니다.
 Dockerfile·빌드 context 허용 목록은 `python/fastapi/`에서 관리합니다.
 로컬 실행 정의는 루트 `compose.yaml` 하나가 소유하며 `scripts/compose.sh`가 구현별 build 경로와 환경 예시를 선택합니다.
 API는 기본 실행하고 Prometheus·Grafana는 `monitoring` profile로 선택합니다.

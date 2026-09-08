@@ -1,6 +1,6 @@
 # FastAPI 시작점
 
-Status: 최소 HTTP 앱·환경 설정·패키지 빌드 검증 · 2026-09-07
+Status: SQLite 예약·동시성·멱등성 1차 구현·검증 완료 · 2026-09-08
 
 이 디렉터리는 독립적인 uv 프로젝트입니다. Python 버전은 `.python-version`,
 의존성은 `pyproject.toml`과 `uv.lock`에서 관리합니다. Python 3.14.7,
@@ -9,17 +9,54 @@ FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 
 ## 선택 DB 연결
 
-`DB_PRIMARY_URL`을 비우면 DB 없는 앱입니다. 현재 파일 SQLite만 지원하며 업무 schema는 아직 없습니다.
+`DB_PRIMARY_URL`을 비우면 DB 없는 앱이며 예약 endpoint를 등록하지 않습니다. 현재 파일 SQLite만 지원합니다.
 로컬에서는 `mkdir -p data` 후 `.env`에 `DB_PRIMARY_URL=sqlite+aiosqlite:///./data/reservations.db`를 설정합니다.
-Compose에서는 저장소 루트에서 다음과 같이 실행합니다. `/app/data`는 UID 10001이 쓰는 named volume입니다.
-
-```sh
-DB_PRIMARY_URL=sqlite+aiosqlite:////app/data/reservations.db ./scripts/compose.sh fastapi --profile monitoring up --build --wait
-```
+Compose에서는 아래 빠른 시작 순서로 migration을 먼저 실행합니다. `/app/data`는 UID 10001이 쓰는 named volume입니다.
 
 pool 크기·overflow·획득 timeout·SQLite 잠금 timeout은 `.env.example`에서 구분합니다.
 시작 시 연결을 확인하고 실패하면 ready가 되지 않습니다. 시작 중 schema/migration은 수행하지 않습니다.
 DB 계측의 의미와 범위는 [구현 설계](../../design/implementations/fastapi.md#db-계측과-로컬-모니터링-계획)를 참조합니다.
+
+## 예약 예제 빠른 시작
+
+아래 명령은 **저장소 루트**에서 실행합니다. migration을 적용한 뒤 API를 올립니다.
+이미 같은 DB로 실행 중이라면 호환되는 migration인지 확인한 뒤 적용합니다. 기존 재고·예약은 초기화하지 않습니다.
+
+```sh
+export DB_PRIMARY_URL=sqlite+aiosqlite:////app/data/reservations.db
+./scripts/compose.sh fastapi build api
+./scripts/compose.sh fastapi run --rm --no-deps api python -m alembic upgrade head
+./scripts/compose.sh fastapi run --rm --no-deps api python -m template_api.seed --product-id demo --stock 10
+./scripts/compose.sh fastapi --profile monitoring up --wait
+
+curl -i http://127.0.0.1:18081/v1/reservations \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: demo-reservation-001' \
+  -d '{"product_id":"demo"}'
+```
+
+같은 요청을 반복하면 같은 201·본문과 `Idempotency-Replayed: true`가 반환됩니다. 새 예약은 새 키를 사용합니다.
+seed 명령은 상품이 없을 때만 생성하므로 같은 상품에 다시 실행해도 재고를 채우거나 예약을 지우지 않습니다.
+다시 실험하려면 새로운 상품 ID를 사용합니다. 키는 이 DB의 예약 API 전체 범위에서 고유합니다.
+
+네이티브 실행은 `python/fastapi/`에서 `mkdir -p data` 후
+`DB_PRIMARY_URL=sqlite+aiosqlite:///./data/reservations.db`를 환경변수 또는 `.env`로 설정하고 다음을 실행합니다.
+
+```sh
+uv tool run --from uv==0.12.10 uv sync --locked
+uv tool run --from uv==0.12.10 uv run --locked alembic upgrade head
+uv tool run --from uv==0.12.10 uv run --locked python -m template_api.seed --product-id demo --stock 10
+uv tool run --from uv==0.12.10 uv run --locked python -m template_api.run
+```
+
+[Swagger](http://127.0.0.1:18081/docs)에서 product_id와 Idempotency-Key를 입력해 실행할 수 있습니다.
+[DB 대시보드](http://127.0.0.1:13000/d/backend-db-local?var-job=fastapi)에서 트랜잭션·pool을 확인합니다.
+업무 commit 건수에는 재생 요청의 트랜잭션도 포함되며 신규 예약 수와 같지 않습니다.
+API·실패·재시도 계약은 [예약 설계](../../design/implementations/fastapi.md#예약-업무-계약),
+실제 검증 결과는 [검증 기록](../../design/implementations/fastapi-verification.md#예약-동시성멱등성-실행-결과)에 있습니다.
+
+이 예제는 인증·결제·취소·만료가 없는 로컬 학습 시작점입니다. 실제 서비스에 적용할 때 인증/권한과
+사용자별 멱등 키 범위, 보존 정책을 정해야 합니다. PostgreSQL 전환 검증·운영 Sentry·경보는 후속입니다.
 
 ## 코드 배치
 
@@ -91,7 +128,7 @@ curl -i 'http://127.0.0.1:18081/v1/greetings?name=Marin'
 서버형 DB는 생성하지 않습니다. 선택 SQLite 파일은 `api-data` volume에 보관하며 `down`만으로 삭제되지 않습니다.
 모니터링 수집기는 `monitoring` profile로 선택합니다. 이미지 레지스트리에 push하지 않습니다.
 
-개인 설정을 적용할 때는 위 명령의 `--env-file .env.example`을 `--env-file .env`로 바꿉니다.
+개인 Compose 설정은 `../../scripts/compose.sh fastapi --env-file .env up --wait`처럼 환경 파일을 지정합니다.
 Compose는 앱 설정과 `.env.example`의 DB 설정을 명시적으로 컨테이너에 전달합니다.
 env 파일 자체를 이미지나 컨테이너에 복사하지 않습니다. 내부 SERVER_HOST/PORT는 0.0.0.0:8000으로 고정하며
 host 게시 포트와 종료 예산은 루트 `compose.yaml`에서 함께 관리합니다. 앱 15초·Compose 20초입니다.
@@ -268,7 +305,7 @@ DB 기반의 최신 검증 결과와 재현 절차는 [검증 기록](../../desi
 크기 상한·JSON 형식·출력 실패와 실제 Uvicorn 오류 중복 방지를 검증합니다.
 시작 실패·취소·정리 오류에서의 cleanup과 앱별 readiness 분리를 확인했습니다.
 실제 서버의 SIGTERM 후 진행 요청 완료·자원 정리 순서는 POSIX 환경의 격리 프로세스로 검증합니다.
-SIGTERM 시험의 외부 자원은 대역입니다. 실제 SQLite는 별도의 파일 DB 시험으로 검증하며 강제 종료·LB drain은 검증 범위 밖입니다.
+SIGTERM 시험의 외부 자원은 대역입니다. 실제 SQLite는 별도의 파일 DB·프로세스 강제 종료 시험으로 검증합니다. LB drain은 검증 범위 밖입니다.
 
 수명 흐름과 준비 함수 주입 계약은 [FastAPI 설계](../../design/implementations/fastapi.md#앱-조립-차용안)를 참고합니다.
 readiness는 lifespan 준비 성공 상태이며 DB 건강이나 무중단 배포 보장이 아닙니다.

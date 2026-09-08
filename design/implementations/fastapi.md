@@ -1,6 +1,6 @@
 # Python / FastAPI 구현 설계
 
-Status: uv 환경·최소 앱 기동 확인 · 아래 전체 계약·자동 테스트 미완료 · 2026-09-07
+Status: SQLite 예약·동시성·멱등성 1차 구현·검증 완료 · 운영 확장은 후속 · 2026-09-08
 
 [Backend 계약](../backend.md)과 [관측 계약](../observability.md)을 FastAPI에서 구현하는 후보입니다.
 첫 기능은 DB 없는 인사 API이며 다른 서비스·사용자 환경에 의존하지 않습니다.
@@ -155,7 +155,7 @@ Swagger media type과 모델 참조·405 Allow·429 Retry-After·204·stream 재
 Status: 공통 예외·HTTP handler 구현 및 테스트 대역 검증 · 2026-09-07
 
 역할별 구조에 `exceptions/`를 추가하고, 공통 업무 실패와 기능별 실패를 구분합니다.
-아래 예약 예외·409는 설명을 위한 후보이며 예약 정책은 Task 5에서 확정합니다.
+예약 예외·409는 아래 예약 업무 계약에 따라 실제 API에 연결했습니다.
 
 | 위치 | 책임 |
 | --- | --- |
@@ -197,7 +197,7 @@ DB 오류는 확인된 제약·업무 조건만 의미 있는 예외로 변환�
 `tests/test_application_errors.py`에서 테스트 대역의 404 매핑·미등록 예외의 500/오류 기록·원래 예외 보존·
 앱별 등록 격리·형제 예외 비매핑·응답/JSON 로그 원문 비노출·요청 ID·OpenAPI를 검증합니다.
 4xx 외 상태나 INTERNAL_ERROR 코드로 잘못 매핑하면 500으로 드러냅니다.
-현재 실제 예약·DB 오류 변환은 구현하지 않았습니다.
+실제 예약의 품절·키 충돌·상품 없음과 DB 잠금·pool timeout 변환을 구현했습니다.
 범용 예외 registry·자동 탐색·예외별 Builder는 추가하지 않습니다.
 
 ## 로깅과 metrics 매핑
@@ -392,14 +392,57 @@ p95는 마지막 응답 body 송신까지의 histogram 추정값입니다. 저�
 [Grafana Docker](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/),
 [Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/).
 
+## 예약 업무 계약
+
+Status: SQLite 구현·검증 완료 · 2026-09-08
+
+`POST /v1/reservations`는 `{"product_id":"demo"}`와 필수 `Idempotency-Key`를 받아 상품 한 개를 예약합니다.
+키는 1~128자, 상품 ID는 1~64자이며 영문·숫자·`.`·`_`·`:`·`-`만 허용합니다.
+성공은 201의 `data` 안에 `reservation_id`, `product_id`, UTC `created_at`을 반환합니다.
+처음 처리하면 `Idempotency-Replayed: false`, 같은 키·같은 입력이면 같은 201·본문과 `true`를 반환합니다.
+
+| 조건 | HTTP·공개 코드 | 저장 결과 |
+| --- | --- | --- |
+| 상품 없음 | 404 `PRODUCT_NOT_FOUND` | 변경 없음 |
+| 재고 부족 | 409 `SOLD_OUT` | 변경 없음 |
+| 저장된 키에 다른 상품 | 409 `IDEMPOTENCY_CONFLICT` | 기존 성공 유지 |
+| 입력·키 형식 오류 | 422 | 업무 실행 안 함 |
+| SQLite 쓰기 잠금 timeout | 503 `DATABASE_BUSY`, `Retry-After: 1` | 성공 확정 없이 같은 키로 재시도 가능 |
+| pool 획득 timeout | 503 `DATABASE_POOL_TIMEOUT`, `Retry-After: 1` | 변경 없음, 같은 키로 재시도 가능 |
+
+키의 범위는 이 DB의 예약 API 전체이고 성공 키는 DB 수명 동안 보관합니다. 실패로 rollback된 키는 저장하지 않습니다.
+재시도는 클라이언트가 제한된 횟수·간격으로 수행하며 결과를 받지 못했을 때도 같은 키를 유지합니다.
+재고 차감·예약·성공 결과 snapshot은 같은 트랜잭션으로 저장합니다. commit이 완료된 다음 HTTP 응답을 만듭니다.
+
+```mermaid
+flowchart TD
+    REQUEST["예약 요청 · 상품과 멱등 키"] --> BEGIN["Service · BEGIN IMMEDIATE"]
+    BEGIN --> KEY{"저장된 성공 키"}
+    KEY -->|"같은 입력"| REPLAY["기존 결과 읽기"]
+    KEY -->|"다른 입력"| ERROR["업무 실패 · rollback"]
+    KEY -->|"없음"| STOCK["available > 0 조건부 차감"]
+    STOCK --> SAVE["예약 · 키 · 결과 snapshot 저장"]
+    STOCK -->|"상품 없음 / 품절"| ERROR
+    SAVE --> COMMIT["commit"]
+    SAVE -->|"저장 실패"| ERROR
+    REPLAY --> COMMIT
+    COMMIT --> RESPONSE["201 응답"]
+    RESPONSE -. "응답 유실 · 같은 키 재시도" .-> REQUEST
+```
+
+SQLite는 하나의 writer만 실행하므로 이 방식의 처리량을 PostgreSQL에 일반화하지 않습니다.
+인증·결제·취소·만료는 이 실험에 없습니다. 서비스에 적용할 때 사용자별 키 범위·권한·보존 정책을 정합니다.
+실행 명령은 [사용 안내](../../python/fastapi/README.md#예약-예제-빠른-시작), 검증 증거는
+[실행 결과](fastapi-verification.md#예약-동시성멱등성-실행-결과)가 소유합니다.
+
 ## DB 연결 기반 계획
 
-Status: SQLite Engine·Session·DI·DB 계측 구현 · 예약 저장과 PostgreSQL 전환 미구현 · 2026-09-08
+Status: SQLite Engine·Session·DI·예약 저장·DB 계측 구현 · PostgreSQL 전환 미구현 · 2026-09-08
 
 SQLAlchemy 2의 `AsyncEngine`·`async_sessionmaker`와 `aiosqlite`를 사용합니다.
 Engine·Session·DI·트랜잭션 수명은 공통으로 유지하고 SQLite PRAGMA·연결 옵션은 DB별 설정에 한정합니다.
 PostgreSQL 전환 시 드라이버·migration·타입/제약·잠금을 검토하며 실제 DB에서 동시성·멱등성을 다시 검증합니다.
-세부 실행 순서와 완료 기준은 [Task 6 다음 실행 단위](fastapi-tasks.md#다음-실행-단위)가 소유합니다.
+세부 실행 순서와 완료 기준은 [Task 6 실행 기록](fastapi-tasks.md#실행-단위와-완료-기록)이 소유합니다.
 aiosqlite는 연결별 백그라운드 스레드로 SQLite 작업을 처리하며 SQLite의 단일 writer 제약을 없애지는 않습니다.
 패키지는 `uv add`로 추가하고 lock·현재 Python 호환성을 확인합니다. ORM 모델·migration은 다음 세부 task입니다.
 
@@ -464,7 +507,9 @@ URL 미설정 상태의 DB 없는 기본 앱을 유지하고, DB를 설정한 �
 초기 검토값은 pool 4개·추가 연결 0개이며 worker/인스턴스 수를 곱한 전체 예산으로 봅니다.
 여러 연결은 경합을 관찰하기 위한 것이며 동시에 여러 쓰기를 수행한다는 뜻이 아닙니다.
 SQLite driver의 transaction control과 연결별 foreign key 활성화를 명시적으로 설정·검증합니다.
-WAL·BEGIN IMMEDIATE 등 잠금 전략은 후속 경합 시험에서 필요성과 효과를 확인하며 설정만으로 정합성을 주장하지 않습니다.
+예약 쓰기는 명시적 연결 획득에서 `sqlite_write=True`를 전달해 `BEGIN IMMEDIATE`로 시작합니다.
+키 조회 전에 SQLite writer를 확보하므로 같은 키 경합도 제한 시간 안에서 직렬화합니다.
+기본 연결은 `BEGIN`이며 WAL은 설정하지 않습니다. 독립 연결·프로세스 시험으로 원자성과 중복 방지를 검증했습니다.
 
 6-1/6-2 통과 조건: 설정 검증·실제 파일 DB 연결·앱/요청 간 격리·commit/rollback·pool timeout·
 시작 실패/종료 자원 정리입니다. 순차 예약 → 서로 다른 키 경합 → 같은 키 재전송/응답 유실 순서는 기존 task를 따릅니다.
@@ -473,7 +518,7 @@ WAL·BEGIN IMMEDIATE 등 잠금 전략은 후속 경합 시험에서 필요성�
 
 ### DB 계측과 로컬 모니터링 계획
 
-Status: Task 6-1/6-2/6-2M 로컬 구현·검증 완료 · 실제 예약 계측은 6-4 · 2026-09-08
+Status: Task 6-1/6-2/6-2M 및 실제 예약 업무 계측 구현·검증 완료 · 2026-09-08
 
 Engine은 연결 pool을 관리하고 Session 제공자는 Session 수명을 관리합니다. 모니터링은 이를 관측하며
 Session을 종료하거나 누수를 자동 복구하지 않습니다. Session 수와 점유 연결 수를 같은 값으로 취급하지 않습니다.
@@ -487,7 +532,7 @@ AsyncEngine의 `sync_engine` 인스턴스에 listener를 등록하며 전역 Eng
 | `db_pool_connection_hold_seconds` | 같은 점유 구간의 시간. 쿼리 시간·pool 대기 시간과 다름 | 6-1 |
 | `db_pool_connection_limit` | pool 크기와 허용 overflow를 합친 인스턴스별 설정 상한 | 6-1 |
 | `db_sessions_active` | 우리 Session 제공자가 생성하고 아직 정리하지 않은 Session 수 | 6-2 |
-| `db_connection_acquire_seconds` | 업무 트랜잭션 안에서 명시적 `await session.connection()` 호출부터 반환/실패까지. pool 대기 외 새 연결·검증 비용을 포함 | 6-2 |
+| `db_connection_acquire_seconds` | 업무 트랜잭션 안에서 명시적 `await session.connection()` 호출부터 반환/실패까지. pool 대기·새 연결·검증·SQLite BEGIN IMMEDIATE의 쓰기 잠금 대기를 포함 | 6-2 |
 | `db_pool_timeouts_total` | 위 획득 경계에서 확인한 pool timeout만 집계. SQLite 쓰기 잠금 timeout과 구분 | 6-2 |
 | `db_transactions_total`, `db_transaction_duration_seconds` | 바깥쪽 업무의 begin 진입부터 commit/rollback 정리 종료까지. 결과는 `committed`, `rolled_back`, `failed`로 구분 | 6-2 시험, 6-4 실제 예약 연결 |
 
@@ -496,6 +541,7 @@ checkout 이벤트는 연결 획득 후 발생하므로 그 이벤트만으로 p
 commit 시도 이벤트를 성공으로 세지 않습니다. commit 완료 후에만 `committed`, 업무 예외/취소 뒤
 rollback 완료 시 `rolled_back`, commit·rollback 자체 실패 시 `failed`를 기록합니다. 원래 예외·취소를 보존합니다.
 pool 내부의 reset rollback이나 시작 연결 확인을 업무 트랜잭션 건수에 섞지 않습니다.
+재생 요청도 업무 트랜잭션을 commit하므로 commit 건수는 신규 예약 수가 아닙니다.
 
 라벨은 고정된 `role=primary`와 필요한 제한된 결과 값만 사용합니다. DB URL·SQL·입력값·Session ID·
 멱등 키·예외 메시지는 노출하지 않습니다. 계측 실패가 DB 결과를 바꾸지 않도록 격리하고,

@@ -12,8 +12,3 @@ class ReservationData(BaseModel):
     reservation_id: str
     product_id: str
     created_at: datetime
-
-
-class ProductData(BaseModel):
-    product_id: str
-    available: int

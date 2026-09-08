@@ -1,6 +1,6 @@
 # FastAPI 단계별 구현 task
 
-Status: Task 1~4 및 6-1/6-2/6-2M 완료 · 다음 Task 5 예약 계약 확정 · 2026-09-08
+Status: Task 1~8 SQLite 1차 구현·검증 완료 · PostgreSQL 전환은 후속 · 2026-09-08
 
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
@@ -144,7 +144,7 @@ DB 없는 현재 단계에서는 `repositories/`를 생성하지 않습니다.
 promtool·데이터 소스 연결·6개 PromQL·200/422/404 집계·수집 단절·재기동을 검증했습니다.
 설정과 검증 한계는 [로컬 모니터링](fastapi.md#로컬-모니터링)이 소유합니다.
 Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 검증 명세의 모든 항목 완료를 뜻하지 않습니다.
-다음 실행은 업무 정책과 독립적인 Task 6-1 DB 연결 기반입니다. Task 5 예약 계약은 schema 구현 전에 확정합니다.
+이후 Task 6-1 DB 연결 기반을 먼저 진행하고 schema 구현 전에 Task 5 예약 계약을 확정했습니다.
 실제 업무 충돌 코드·queue·운영 수집·로그 검색은 후속입니다.
 
 목표:
@@ -157,27 +157,8 @@ Task 4의 합의된 로컬 범위는 완료했습니다. 전체 관측·배포 �
 
 ## Task 5. 예약 계약 합의
 
-Status: 계약 승인 · 2026-09-08. 사용자 승인으로 아래 최소 계약에 따라 Task 6-3부터 8-2까지 순차 구현·검증합니다.
-첫 DB 실험은 SQLite로 진행합니다.
-요청당 상품 1개를 예약하고 인증·결제·취소·만료는 첫 실험에서 제외하는 안입니다.
-성공 예약과 멱등 키·입력·결과를 같은 DB 트랜잭션에 저장합니다.
-서로 다른 키의 요청이 재고 1개에 경합하면 성공 하나, 나머지는 품절입니다.
-같은 키·같은 입력은 기존 성공 결과를 반환하고, 같은 키·다른 입력은 충돌로 거절합니다.
-진행 중 중복은 제한 시간 내 DB 쓰기 잠금을 기다리는 안이며 timeout은 품절로 바꾸지 않습니다.
-성공 키는 실험 DB 수명 동안 보존하고, rollback된 실패는 저장하지 않아 같은 키로 재시도할 수 있게 하는 안입니다.
-
-```mermaid
-flowchart LR
-    REQUEST["예약 요청 · 멱등 키"] --> TX["SQLite 트랜잭션"]
-    TX --> KEY{"저장된 성공 키?"}
-    KEY -->|"같은 입력"| REPLAY["기존 결과 반환"]
-    KEY -->|"다른 입력"| CONFLICT["키 충돌"]
-    KEY -->|"없음"| STOCK["수량 조건부 차감"]
-    STOCK --> SAVE["예약 · 키 · 결과 저장"]
-    SAVE --> COMMIT["commit 후 성공 응답"]
-```
-
-그림의 차감·저장은 한 트랜잭션입니다. 품절·저장 실패 시 rollback하며 성공 응답의 실제 수신 여부와 commit은 구분합니다.
+Status: 계약 승인·구현 완료 · 2026-09-08. 확정한 API·키 범위·실패·재시도 정책과 Mermaid는
+[예약 업무 계약](fastapi.md#예약-업무-계약)이 소유합니다.
 
 목표:
 예약 수량과 성공·품절의 의미, 멱등 키의 범위 및 재사용 정책을 사용자와 정합니다.
@@ -194,10 +175,10 @@ flowchart LR
 이후 PostgreSQL로 전환하는 방향을 합의했습니다. 드라이버·DB별 연결 설정을 서비스와 분리하며 PostgreSQL 코드를 선행 구현하지 않습니다.
 연결 관리안은 표준 `sqlite3` 직접 사용 후보에서 SQLAlchemy AsyncEngine·aiosqlite 후보로 구체화했습니다.
 Engine·Session·트랜잭션 소유권과 첫 세부 task는 [DB 연결 기반 계획](fastapi.md#db-연결-기반-계획)이 소유합니다.
-실제 파일 기반 임시 DB와 독립 Session/연결로 검증합니다. DB 의존성·Engine·Session 코드는 추가했고 예약 저장은 아직 없습니다.
+실제 파일 기반 임시 DB와 독립 Session/연결로 검증했습니다. Engine·Session·migration·예약 저장을 구현했습니다.
 SQLite는 단일 writer이므로 쓰기 경합이 직렬화됩니다. WAL도 여러 writer를 동시에 실행하게 만들지는 않습니다.
 이 실험으로 PostgreSQL의 행 잠금·다중 writer 처리량까지 검증했다고 설명하지 않습니다.
-schema 생성 방식·DB 파일 위치·잠금 대기 제한·HTTP 매핑은 구현 착수 시 구체화합니다.
+schema 생성은 Alembic 명령으로 수행하며 DB 파일·잠금 대기 설정과 HTTP 매핑은 구현 설계에 기록했습니다.
 참고(2026-09-07): [SQLite 격리](https://www.sqlite.org/isolation.html),
 [SQLite 트랜잭션](https://www.sqlite.org/lang_transaction.html).
 
@@ -210,7 +191,7 @@ DB 선택과 격리 시험 대상, DB 생성·migration 범위는 실행 전에 
 - 예약과 수량 변경의 원자성, session 소유권과 pool 예산이 명시됩니다.
 - Replica·샤딩·범용 읽기 라우터 없이 단일 Primary로 동작합니다.
 
-### 다음 실행 단위
+### 실행 단위와 완료 기록
 
 기존 Task 번호를 유지하면서 작게 나눕니다. 각 행의 검증이 끝나면 task별 커밋·push 후 다음 단계로 넘어갑니다.
 Task 6-1/6-2는 예약 정책 확정 전에도 진행할 수 있으며, Task 6-3부터는 Task 5 합의가 필요합니다.
@@ -259,12 +240,14 @@ timeout은 각각 503의 별도 코드/Retry-After로 반환하며 잠금/연결
 SQLite 쓰기 업무는 `BEGIN IMMEDIATE` 후 키를 확인하며 같은 키 재전송은 재고를 다시 차감하지 않습니다.
 키 저장 후 실패의 전체 rollback·같은 키 재시도와 기존 경합 시험을 포함해 86개 테스트·Ruff·ty가 통과했습니다.
 
-### Task 6-1. Engine과 pool 계측
-
 8-2 실행 결과(2026-09-08): 같은 키 12개 동시 요청은 신규 예약 1개·재생 11개,
 같은 키/다른 입력 경합은 성공 1개·충돌 1개입니다. 응답 body 전송 실패 뒤 앱 재생성,
 별도 프로세스의 commit 직전/직후 강제 종료와 재시도에서 원자성·결과 재생을 확인했습니다.
 독립 프로세스 두 개도 같은 키/다른 키 모두 재고 1개·예약 1개의 불변조건을 지킵니다.
+최종 리뷰에서 실제 예약 commit 실패·seed 비초기화 시험을 포함해 95개 테스트·Ruff·ty가 통과했습니다.
+컨테이너 경합·DB 결과·Prometheus 대조와 남은 한계는 [실행 결과](fastapi-verification.md#예약-동시성멱등성-실행-결과)에 기록합니다.
+
+### Task 6-1. Engine과 pool 계측
 
 Status: 완료 · 2026-09-08. SQLAlchemy 2.0.52·aiosqlite 0.22.1을 `uv add`로 추가했습니다.
 기존 포함 63개 테스트와 Ruff·ty 통과. 파일 DB rollback·pool 고갈/무효화/회복·앱 재시작/격리·
@@ -283,7 +266,7 @@ SQLite Primary 연결 기반과 연결 점유 계측을 함께 구현합니다.
 
 Status: 완료 · 2026-09-08. 실제 파일 DB의 성공·중간 실패·지연 FK commit 실패·rollback 실패 주입,
 요청별 Session 격리·취소 후 반환·pool timeout 후 회복·SQLite 잠금 실패 구분을 검증했습니다.
-트랜잭션 소유권 예시는 `tests/dependencies/test_database.py`의 시험 업무이며 예약 API는 아직 없습니다.
+이 단계의 시험 업무는 `tests/dependencies/test_database.py`이며 이후 6-4에서 실제 예약 API에 연결했습니다.
 서비스는 `acquire_primary_connection`으로 획득하고 `record_transaction`으로 확정 결과를 기록합니다.
 자동 commit wrapper는 추가하지 않았습니다.
 

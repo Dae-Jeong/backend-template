@@ -1,9 +1,45 @@
 # FastAPI 검증 케이스
 
-Status: 명세 기준 · 기반 HTTP·관측과 단일 API Compose smoke 검증, 전체 계약 미완료 · 2026-09-07
+Status: SQLite 1차 구현·자동 검증·컨테이너 smoke 완료 · 아래 실행 결과와 후속 명세 구분 · 2026-09-08
 
-[구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 이 목록은 실행 결과가 아닙니다.
-현재 실행 결과는 [단계별 task](fastapi-tasks.md)와 [사용 안내](../../python/fastapi/README.md)에 기록합니다.
+[구현 설계](fastapi.md)의 상태와 경계를 검증합니다. 실행 결과 절은 실제 관측이며 이후 케이스 표는 검증 기준입니다.
+진행 상태는 [단계별 task](fastapi-tasks.md), 실행 명령은 [사용 안내](../../python/fastapi/README.md)가 소유합니다.
+
+## 예약 동시성·멱등성 실행 결과
+
+확인일: 2026-09-08 · Task 6-3~8-2 및 마무리 리뷰.
+
+| 검토 항목 | 실행 증거 |
+| --- | --- |
+| 자동 검사 | 전체 pytest **95개 통과**, Ruff lint/format·ty 통과. 기존 Starlette BlockingPortal deprecation 경고 1개 표시 유지 |
+| schema | 공식 Alembic upgrade·반복 upgrade·check, 실제 파일 DB의 FK·음수 재고·키 중복 제약 검증 |
+| 원자성 | 차감·예약·키 저장 중 실패 시 전체 rollback. 실제 예약 API에 지연 FK 위반을 주입해 commit 실패 시 500·변경 없음·같은 키 재시도 성공 검증 |
+| 서로 다른 키 경합 | 독립 앱/Engine 2개에서 2개·12개 요청, 독립 프로세스 2개에서 재고 1개에 성공 하나 검증 |
+| 같은 키 경합 | 12개 요청에서 신규 1개·재생 11개. 같은 키·다른 입력 경합은 성공 1개·409 충돌 1개 |
+| 실패·복구 | SQLite 잠금과 pool timeout의 별도 503 및 회복, 저장 후 실패 재시도, 응답 body 유실 뒤 앱 재생성/재생 검증 |
+| 프로세스 종료 | 별도 프로세스를 commit 직전/직후 `os._exit`로 종료하고 같은 키 재시도. 직전은 변경 없음, 직후는 저장된 결과 재생 |
+| 시작 도구 | seed CLI 재실행 시 기존 재고를 채우거나 예약을 지우지 않는 시험 통과 |
+
+컨테이너 이미지 빌드 후 `/app/data/reservations.db`에 migration·seed를 실행했습니다.
+API·Prometheus·Grafana가 healthy이며 런타임 컨테이너의 `alembic check`는 변경 없음입니다.
+실제 TCP 요청으로 첫 예약 201, 같은 키의 동일 본문 재생 201, 다른 입력 충돌 409를 확인했습니다.
+별도 상품 `review-race-20260908`의 재고 1개에 12개 요청을 보내 201 하나·SOLD_OUT 409 열한 개를 확인했습니다.
+SQLite를 읽기 전용으로 조회한 결과 해당 상품 재고 0·예약 1개, demo 재고 9·예약 1개, 전체 키 2개입니다.
+Swagger `/docs` 200과 OpenAPI 예약 입력/응답 등록을 확인했습니다.
+
+동일 실행을 Prometheus와 대조해 `up=1`, 업무 트랜잭션 `committed=3`, `rolled_back=12`, `failed=0`,
+종료 후 활성 Session·점유 연결 모두 0을 확인했습니다. commit 3건은 신규 예약 2건과 재생 1건입니다.
+Grafana health는 200이며 실제 DB 화면에서도 UP·점유 0/상한 4·Session 0·commit 3·rollback 12·failed 0을 대조했습니다.
+요청이 없는 최근 1분 p95는 No data로 표시됩니다. 기존 DB 패널의 추가 검증 범위는 아래에 기록합니다.
+
+리뷰에서 오래된 미구현 상태 표기와 연결 획득 지표 설명을 수정했습니다.
+연결 획득 지연에는 SQLite 쓰기 잠금 대기도 들어가며 순수 pool 대기 시간으로 해석하면 안 됩니다.
+공통 DB 대역에 있던 commit 실패 시험을 실제 예약 API에도 추가해 검증 공백을 보완했습니다.
+
+한계: readiness는 시작 연결·자원 준비 확인이며 schema revision 검사나 지속적인 DB 건강 확인은 아닙니다.
+따라서 사용 안내의 migration 선행 순서를 따라야 합니다. 임의 전원 장애·파일 손상·OOM의 무손실,
+PostgreSQL 격리 수준/처리량·다중 worker HTTP 서버의 성능·운영 Sentry·인증/권한은 검증하지 않았습니다.
+이 결과는 로컬 SQLite 1차 완료 판정이며 운영 서비스 전체 준비 완료를 뜻하지 않습니다.
 
 ## DB 기반 실행 결과
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from template_api.contracts.reservations import Product, Reservation
@@ -10,6 +11,15 @@ from template_api.exceptions.reservations import (
     SoldOut,
 )
 from template_api.models.reservations import idempotency_keys, products, reservations
+
+
+async def seed_product(session: AsyncSession, product_id: str, stock: int) -> Product:
+    await session.execute(
+        sqlite_insert(products)
+        .values(id=product_id, available=stock)
+        .on_conflict_do_nothing(index_elements=[products.c.id])
+    )
+    return await get_product(session, product_id)
 
 
 async def get_product(session: AsyncSession, product_id: str) -> Product:

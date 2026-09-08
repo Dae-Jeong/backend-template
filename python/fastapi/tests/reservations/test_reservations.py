@@ -1,4 +1,5 @@
 import json
+import os
 import selectors
 import sqlite3
 import subprocess
@@ -11,13 +12,13 @@ from threading import Barrier
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import insert
+from sqlalchemy import insert, text
 from sqlalchemy.engine import make_url
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from template_api.bootstrap.app import create_app
 from template_api.core.settings import Settings
-from template_api.models.reservations import products
+from template_api.models.reservations import products, reservations
 
 
 def database_state(url: str) -> tuple[int, int, int]:
@@ -29,6 +30,32 @@ def database_state(url: str) -> tuple[int, int, int]:
             connection.execute("SELECT count(*) FROM reservations").fetchone()[0],
             connection.execute("SELECT count(*) FROM idempotency_keys").fetchone()[0],
         )
+
+
+def test_seed_cli_preserves_existing_stock(database_url: str) -> None:
+    def seed(stock: int):
+        process = subprocess.run(
+            [sys.executable, "-m", "template_api.seed", "--stock", str(stock)],
+            env={**os.environ, "DB_PRIMARY_URL": database_url},
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert process.returncode == 0, process.stderr
+        return json.loads(process.stdout)
+
+    assert seed(2) == {"product_id": "demo", "available": 2}
+    with TestClient(create_app(Settings(db_primary_url=database_url))) as api:
+        assert (
+            api.post(
+                "/v1/reservations",
+                json={"product_id": "demo"},
+                headers={"Idempotency-Key": "first"},
+            ).status_code
+            == 201
+        )
+    assert seed(100) == {"product_id": "demo", "available": 1}
+    assert database_state(database_url) == (1, 1, 1)
 
 
 @pytest.fixture
@@ -101,6 +128,39 @@ def test_save_failure_rolls_back_stock(
     assert database_state(database_url) == (1, 0, 0)
     metrics = client.get("/metrics").text
     assert 'db_transactions_total{outcome="rolled_back",role="primary"} 1.0' in metrics
+
+
+def test_commit_failure_rolls_back_and_same_key_can_retry(
+    client: TestClient, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import template_api.services.reservations as service
+
+    original = service.save_idempotency
+
+    async def invalid_deferred_fk(session, key, reservation):
+        await original(session, key, reservation)
+        # Actual SQLite constraint failure at COMMIT, after all business writes.
+        await session.execute(text("PRAGMA defer_foreign_keys=ON"))
+        await session.execute(
+            insert(reservations).values(
+                id="invalid-fk",
+                product_id="missing",
+                created_at=reservation.created_at.isoformat(),
+            )
+        )
+
+    monkeypatch.setattr(service, "save_idempotency", invalid_deferred_fk)
+    failed = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert failed.status_code == 500
+    assert database_state(database_url) == (1, 0, 0)
+    metrics = client.get("/metrics").text
+    assert 'db_transactions_total{outcome="failed",role="primary"} 1.0' in metrics
+    assert 'db_transactions_total{outcome="committed",role="primary"} 0.0' in metrics
+    monkeypatch.setattr(service, "save_idempotency", original)
+    retried = client.post("/v1/reservations", json={"product_id": "demo"})
+    assert retried.status_code == 201
+    assert retried.headers["Idempotency-Replayed"] == "false"
+    assert database_state(database_url) == (0, 1, 1)
 
 
 @pytest.mark.parametrize("requests", [2, 12])
