@@ -6,6 +6,8 @@ FastAPI·SQLite, NestJS·SQLite, Spring Boot·H2 구현을 제공합니다.
 
 ## 가이드 읽기
 
+새 서비스에 가져다 쓸 때는 [템플릿 적용 Runbook](RUNBOOK.md)부터 시작합니다.
+
 | 영역 | 읽는 목적 | 시작 문서 |
 | --- | --- | --- |
 | 사용 가이드 | 실행하고 기능을 붙입니다. | [FastAPI](design/implementations/quickstart.md) · [NestJS](ts/nestjs/README.md) · [Spring Boot](java/spring-boot/README.md) · [모니터링](design/implementations/local-monitoring.md) |

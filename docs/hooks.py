@@ -8,7 +8,7 @@ from mkdocs.structure.files import File, Files
 
 def on_files(files: Files, *, config: MkDocsConfig) -> Files:
     root = Path(config.config_file_path).parent
-    sources = [root / "README.md"]
+    sources = [root / "README.md", root / "RUNBOOK.md"]
     for language in ("python", "ts", "java"):
         sources.extend(sorted((root / language).glob("*/README.md")))
     sources.extend(sorted((root / "design").rglob("*.md")))

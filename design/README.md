@@ -26,8 +26,9 @@ Status: canonical-design · 공통 설계와 구현별 검증을 구분하는 �
 [루트 실행 안내](../README.md#가이드-읽기)의 MkDocs 가이드가 이 정본을 직접 렌더링합니다.
 메뉴는 사용 가이드·상세 설명·작업 및 검증 기록을 상단 탭으로 나눕니다.
 사용 가이드는 작업 순서·명령·확인 결과, 상세 설명은 구조·설정·설계 이유, 기록은 수행한 작업과 검증 증거를 소유합니다.
-내용을 삭제하거나 요약본으로 대체하지 않고 읽는 목적에 따라 배치합니다. 서비스 적용 안내는
-[구현별 가이드](implementations/service-guide.md)가 소유합니다. `docs/`는 문서 도구 환경이며 설계 본문을 복제하지 않습니다.
+내용을 삭제하거나 요약본으로 대체하지 않고 읽는 목적에 따라 배치합니다. 템플릿 적용의 공통 작업 순서는
+[루트 Runbook](../RUNBOOK.md), FastAPI 세부 절차는 [서비스 적용 가이드](implementations/service-guide.md)가 소유합니다.
+설계 정본은 계속 `design/`에 두며 `docs/`는 문서 도구 환경으로 본문을 복제하지 않습니다.
 
 MkDocs 1.6.1·Material 9.7.7을 uv로 설치·고정했습니다. 공식 `mkdocs new`로 초기화한 뒤
 [파일 hook](https://www.mkdocs.org/dev-guide/plugins/#on_files)으로 기존 원문을 연결하고

@@ -27,6 +27,7 @@ hooks:
   - docs/hooks.py
 watch:
   - README.md
+  - RUNBOOK.md
   - design
   - python/fastapi/README.md
   - ts/nestjs/README.md
@@ -55,6 +56,7 @@ markdown_extensions:
 nav:
   - 사용 가이드:
       - 어디서 시작할까요: README.md
+      - 템플릿 적용 Runbook: RUNBOOK.md
       - FastAPI 실행: design/implementations/quickstart.md
       - NestJS 실행: ts/nestjs/README.md
       - Spring Boot 실행: java/spring-boot/README.md
