@@ -150,7 +150,7 @@ flowchart TD
 ```
 
 스크립트는 호출 위치와 무관하게 저장소 루트를 Compose 기준 경로로 사용합니다.
-기본 실행은 [루트 안내](../../README.md#사용할-방식), 앱 확인은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)를 따릅니다.
+기본 실행은 [로컬 실행 가이드](quickstart.md), 앱 확인은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)를 따릅니다.
 Java/Spring Boot·TypeScript/Nest에는 각 언어와 프레임워크에 맞는 별도 배치를 정합니다.
 
 ## 소비 프로젝트에서 바꿀 수 있는 부분

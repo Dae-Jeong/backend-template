@@ -11,6 +11,8 @@ theme:
     primary: teal
     accent: teal
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - search.suggest
@@ -49,21 +51,22 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
-  - 시작하기:
-      - 가이드 개요: README.md
-      - FastAPI 실행: python/fastapi/README.md
+  - 사용 가이드:
+      - 어디서 시작할까요: README.md
+      - 로컬 실행: design/implementations/quickstart.md
       - 내 서비스에 적용: design/implementations/service-guide.md
-  - 구조와 개발:
+  - 상세 설명:
+      - 프로젝트 개요: design/overview.md
+      - 실행 환경과 명령: python/fastapi/README.md
       - 폴더와 역할: design/implementations/fastapi-structure.md
       - FastAPI 구현 계약: design/implementations/fastapi.md
       - DI 선택 근거: design/implementations/fastapi-di-options.md
       - 개발 원칙: design/engineering.md
-  - 관측과 검증:
       - 로깅과 Metrics: design/observability.md
-      - 검증 결과와 재현: design/implementations/fastapi-verification.md
-      - 완료 작업과 후속 범위: design/implementations/fastapi-tasks.md
-  - 설계 참고:
       - 문서 소유권: design/README.md
       - 공통 Backend: design/backend.md
       - Runtime과 성능: design/runtime-review.md
       - 구현별 현황: design/implementations/README.md
+  - 작업·검증 기록:
+      - 검증 결과와 재현: design/implementations/fastapi-verification.md
+      - 완료 작업과 후속 범위: design/implementations/fastapi-tasks.md

@@ -19,23 +19,8 @@ DB 계측의 의미와 범위는 [구현 설계](../../design/implementations/fa
 
 ## 예약 예제 빠른 시작
 
-아래 명령은 **저장소 루트**에서 실행합니다. 컨테이너가 migration을 적용한 뒤 API를 올립니다.
-이미 같은 DB로 실행 중이라면 호환되는 migration인지 확인한 뒤 적용합니다. 기존 재고·예약은 초기화하지 않습니다.
-
-```sh
-export DB_PRIMARY_URL=sqlite+aiosqlite:////app/data/reservations.db
-./scripts/compose.sh fastapi --profile monitoring up --build --wait
-./scripts/compose.sh fastapi run --rm --no-deps api python -m template_api.seed --product-id demo --stock 10
-
-curl -i http://127.0.0.1:18081/v1/reservations \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: demo-reservation-001' \
-  -d '{"product_id":"demo"}'
-```
-
-같은 요청을 반복하면 같은 201·본문과 `Idempotency-Replayed: true`가 반환됩니다. 새 예약은 새 키를 사용합니다.
-seed 명령은 상품이 없을 때만 생성하므로 같은 상품에 다시 실행해도 재고를 채우거나 예약을 지우지 않습니다.
-다시 실험하려면 새로운 상품 ID를 사용합니다. 키는 이 DB의 예약 API 전체 범위에서 고유합니다.
+[로컬 실행 가이드](../../design/implementations/quickstart.md)에 컨테이너 시작 → 상품 생성 → 예약·재시도 → 종료 순서를 모았습니다.
+이 문서는 실행 방식·환경 설정·도구 명령의 상세 참조입니다.
 
 네이티브 실행은 `python/fastapi/`에서 `mkdir -p data` 후
 `DB_PRIMARY_URL=sqlite+aiosqlite:///./data/reservations.db`를 환경변수 또는 `.env`로 설정하고 다음을 실행합니다.
