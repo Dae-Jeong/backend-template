@@ -1,69 +1,111 @@
-# Spring Boot 검증 계획
+# Spring Boot 검증 기록
 
-Status: 검증 케이스 설계안 · 실행 결과 없음 · 2026-09-08
+Status: 실제 구현·검증 결과 · 2026-09-08
 
-이 문서는 Spring Boot 구현의 통과 조건과 실행 증거를 소유합니다.
-FastAPI의 통과 결과를 Java 구현의 증거로 사용하지 않습니다.
-파일 배치는 [폴더 구조](spring-boot-structure.md), 구현 순서는 [task](spring-boot-tasks.md)를 따릅니다.
+실행 가이드는 [README](../../java/spring-boot/README.md), 선택·transaction 의미는
+[구현 설계](spring-boot.md)가 소유합니다. FastAPI 시험 통과를 Java의 검증 증거로 사용하지 않습니다.
 
-## 시험 계층
+## 환경과 명령
 
-| 계층 | 확인 범위 | 방식 |
-| --- | --- | --- |
-| 순수 단위 | 업무 판단·내부 결과·시간 제어 | Spring context 없이 직접 생성하고 `Clock.fixed`·명시적 대역을 전달합니다. |
-| HTTP 경계 | 입력·성공 DTO·Problem Details·헤더 | MVC 시험에서 요청·응답의 status·Content-Type·schema를 확인합니다. |
-| 앱 통합 | Bean 조립·설정·수명·실제 서버 오류 경로 | `@SpringBootTest`와 동적 포트의 실제 HTTP 요청으로 확인합니다. |
-| DB 통합 | migration·제약·transaction·pool | 선택한 실제 DB의 격리 파일 또는 승인된 테스트 DB를 사용합니다. |
-| 프로세스 | 종료·응답 유실·여러 인스턴스 경합 | 실제 프로세스와 독립 Connection에서 영속 상태를 확인합니다. |
-
-서버 시험은 고정 개발 포트를 차지하지 않으며 [중앙 포트 기준](README.md#로컬-포트-배정)을 따릅니다.
-MockMvc 통과만으로 소켓 전송·실제 서버 dispatch·종료가 검증됐다고 표시하지 않습니다.
-[Spring Boot testing](https://docs.spring.io/spring-boot/reference/testing/spring-boot-applications.html)
-
-## 기반 통과 조건
-
-| 대상 | 기대 결과 |
+| 항목 | 확인값 |
 | --- | --- |
-| 공식 생성·Wrapper | 고정 JDK·Boot·Gradle 조합에서 빌드와 기본 시험이 통과하고 전역 Gradle 설치에 의존하지 않습니다. |
-| 설정 | 잘못된 타입·범위·필수값 누락은 시작 실패이며 비밀값이 로그에 노출되지 않습니다. |
-| DI | Clock 대역 교체가 가능하고 field injection·Service Locator·순환 Bean 의존이 없습니다. |
-| 시작 실패 | 중간 자원 준비 실패 시 먼저 획득한 자원이 종료되고 readiness가 성공하지 않습니다. |
-| 종료 | SIGTERM에서 진행 요청의 종료·timeout과 소유 자원 반환 순서가 확인됩니다. |
-| 정상 응답 | 공통 `data` 구조·JSON 이름·시간 표현이 유지되고 health·metrics·문서·파일·stream에는 envelope가 없습니다. |
-| 거절·오류 | 누락·타입 오류·검증·잘못된 JSON은 422로 매핑되고 404·405·500도 동일 Problem schema입니다. `Allow`·`Retry-After` 등 프로토콜 헤더가 보존됩니다. |
-| 요청 문맥 | 헤더·오류 본문·로그의 요청 ID가 일치하고 다음 요청에 MDC 값이 남지 않습니다. |
-| 관측 | HTTP·JVM·pool의 실제 지표와 대시보드 의미가 대응하며 원시 경로·요청 ID·멱등 키가 metric label에 없습니다. |
+| Initializr·Boot | 4.1.1 |
+| Gradle Wrapper | 9.7.1 |
+| Java major | .java-version의 25 |
+| native JDK | Temurin 25.0.4.1+1 LTS, macOS arm64, 프로젝트 시험용 /tmp 설치 |
+| Docker JDK/JRE | Temurin 25, 실제 resolve 25.0.4+7 noble arm64 |
+| Spring Framework | 7.0.9 |
+| H2 | 2.4.240 |
+| Flyway engine / 파일 생성 CLI | 12.4.0 / 13.4.0 |
+| Springdoc | 3.1.1 |
 
-Boot 버전별 예외·error dispatch 차이는 실제 응답을 기준으로 기록합니다.
-필터 바깥 실패나 이미 전송된 응답은 새 Problem 본문을 덧붙여 정상화하지 않습니다.
+Initializr metadata의 최신 stable·지원 Java/의존성 목록과 공식 호환 표를 먼저 확인했습니다.
+최초 생성·시험은 설치된 Java 21을 썼고 중앙 요청에 따라 Java 25 LTS로 전환했습니다.
+전역 설치·공유 DB·계정·기존 서비스 포트는 변경하지 않았습니다.
 
-## DB·동시성·멱등성 통과 조건
+```sh
+cd java/spring-boot
+./gradlew clean test bootJar --no-daemon --console=plain
+```
 
-DB와 migration 선택 이후에 실행합니다. H2·mock 시험을 SQLite 또는 PostgreSQL의 잠금 검증으로 대체하지 않습니다.
+Java compiler `-Xlint:all,-processing,-serial`·`-Werror`와 strict dependency locking을 포함합니다.
+테스트 결과는 `build/reports/tests/test/index.html`, JUnit XML은 `build/test-results/test/`입니다.
+lockfile 생성은 공식 `./gradlew test bootJar --write-locks`로 수행했습니다.
+migration 파일은 공식 `flyway help add` 확인 후 `flyway add -add.version=1|2 -add.timestamp=never ...`로 만들었습니다.
 
-| 대상 | 기대 결과 |
+## 실행한 시험
+
+| 시험 | 확인 내용 |
 | --- | --- |
-| migration | 새 DB 적용·재실행·실패 시 시작 차단이 확인되고 기존 데이터가 보존됩니다. |
-| transaction 연결 | proxy를 거친 한 업무의 모든 저장이 같은 Primary transaction에 참여합니다. |
-| rollback 정책 | RuntimeException·checked exception·중간 저장 실패에서 전체 변경이 취소됩니다. |
-| proxy 경계 | 실제 Bean 경유 호출이 transaction을 만들고 self-invocation에 의존하는 업무 경로가 없습니다. |
-| commit 실패 | commit 단계의 실패가 HTTP 성공으로 나가지 않고 새 Connection에서 부분 저장이 없습니다. |
-| pool·잠금 대기 | 유한 timeout 후 자원 해제와 일시 장애 응답이 확인됩니다. 품절로 잘못 분류하지 않습니다. |
-| 다른 키 경합 | 재고 1개에 동시 요청을 보내면 성공 1개이며 재고가 음수가 되지 않습니다. |
-| 같은 키·같은 입력 | 신규 효과는 1회이고 나머지는 원래 status·body를 재생합니다. |
-| 같은 키·다른 입력 | 키 충돌 응답이며 추가 예약·차감이 없습니다. |
-| 저장 후 응답 유실 | 같은 키로 재시도하면 저장된 결과를 재생하고 다시 차감하지 않습니다. |
-| 프로세스 강제 종료 | commit 전에는 취소, commit 후에는 재생 가능하며 독립 프로세스에서도 중복 효과가 없습니다. |
-| transaction 계측 | 실제 완료 outcome과 영속 상태가 일치하고 조회·재생 transaction을 신규 예약 수로 세지 않습니다. |
+| GreetingServiceTest | context 없는 생성자 DI·고정 Clock |
+| TemplateApplicationTests | no-db context |
+| HttpDatabaseTest | 실제 소켓·file DB, 인사/data·Problem·request ID·404/405 Allow·엄격 입력422·health/metrics/docs |
+| HttpDatabaseTest | 최초201·원래body/status 재생·다른입력409·품절·미존재·다중HTTP 동일/다른키·잠금/pool timeout·독립상품진행 |
+| HttpDatabaseTest | 클라이언트가 응답을 버린 뒤 재시도·재고/예약/결과 독립 연결 확인 |
+| TransactionFailureTest | public proxy checked/unchecked rollback·중간 constraint 실패·JDBC commit 실패·claim 전체 rollback |
+| TransactionFailureTest | commit gate 중 응답 미완료·committed 지표 미증가·500 번역·같은키 재시도 |
+| ProcessRecoveryTest | 독립 JVM 같은키·다른키 경합, commit 전/후 kill, commit 후 응답 미전달 상태 재생 |
+| ProcessRecoveryTest | embedded file DB의 실제 JVM 종료·재시작 원래 결과 재생 |
+| MigrationTest | V1→V2 데이터 보존·claim backfill·guard 제거·반복 실행·실패 migration |
+| LifecycleTest | 빈 URL 자동 비활성·healthy readiness·예약 제외·잘못된 설정·부분 시작 실패 pool 종료 |
+| ShutdownTest | 실제 SIGTERM 중 진행 HTTP 요청 완료·프로세스 종료·file DB 잠금 반환 |
+| ObservationTest | 서버ID·MDC 정리·원래 chain 예외 보존·로그 failure/type·metrics 실패 격리 |
+| SpecialHttpTest | 204·파일·실제 committed stream·429 Retry-After·error dispatch·요약 중복 없음·민감 원문 제외 |
 
-commit 검증 시험은 테스트 메서드의 자동 rollback transaction에 업무를 감싸지 않습니다.
-HTTP 호출 또는 명시적 commit이 끝난 후 독립 Connection으로 결과를 읽습니다.
-동시 시험은 시작 장벽과 유한 timeout을 사용하고 테스트가 띄운 프로세스·자원만 정리합니다.
+테스트는 업무 transaction을 자동 rollback하는 테스트 transaction으로 감싸지 않습니다.
+독립 JDBC 연결에서 commit 이후 저장 상태를 확인합니다.
+TCP 시험은 중앙 승인 아래 127.0.0.1·OS 임시포트·임시파일을 쓰며 자기 프로세스만 종료합니다.
+embedded 파일의 다중 JVM 접근 제한을 TCP 시험과 구분합니다.
 
-## 실행 결과를 기록할 형식
+commit 실패는 실제 JdbcTransactionManager의 Connection.commit 호출 지점에 SQLException을 주입합니다.
+H2가 deferred FK를 지원한다고 가정하지 않으며 물리 디스크 고장을 일으키지 않습니다.
+관측 counter는 실패 1·committed 0과 영속 상태를 대조한 뒤 재시도 성공을 확인합니다.
 
-task 완료 때 **실행일·commit·JDK/Boot/Gradle/DB 버전·실제 명령·통과/실패·미검증 범위**를 기록합니다.
-현재는 Java 프로젝트와 명령이 생성되지 않았으므로 테스트 수·빌드 성공·성능 수치를 기입하지 않습니다.
-설계 문서 build와 Mermaid 검사는 앱 런타임 검증과 구분합니다.
+Spring 7.0.9에서는 OutputStream.flush가 기본적으로 network flush가 아니므로 stream 시험은
+HttpServletResponse.flushBuffer로 실제 committed 상태를 만든 뒤 IOException을 발생시킵니다.
+이미 전송된 body에 Problem 응답을 덧붙이지 않는 것과 정상 전송 성공은 구분합니다.
 
-공식 문서 확인일: **2026-09-08**.
+## native·이미지·재사용
+
+native 게시 127.0.0.1:18085를 실행 직전 점유 확인 후 사용했습니다.
+임시 작업 디렉터리의 file DB에 seed→예약201→SIGTERM→새 JVM→동일body201 replay를 확인했습니다.
+native stdout 로그의 JSON·서버ID·민감 클라이언트ID 제외를 검사했습니다.
+실행 로그는 `/var/folders/lt/6xldspxd1kd2wnx9hmc8qjv80000gn/T/spring-native-final-0euqy6vl/`,
+비밀 없는 scrape는 `/tmp/spring-final-metrics.prom`에 남겼습니다. 두 경로는 로컬 임시 증거이며 배포 입력이 아닙니다.
+
+```sh
+docker build --build-arg JAVA_VERSION="$(cat java/spring-boot/.java-version)" \
+  -t backend-template-spring:local java/spring-boot
+```
+
+Docker locked 빌드는 통과했습니다. JAVA_VERSION 기본값을 두지 않으므로 Docker 정적 lint의
+InvalidDefaultArgInFrom 경고 2개가 있으며 실제 명령은 필수 arg를 전달합니다.
+이미지는 curl healthcheck·UID10001·/app/data·내부8080을 사용합니다.
+중앙 Compose의 127.0.0.1:18086 실행·수집기 확인 결과는 중앙 통합 보고와 구분합니다.
+
+## 실제 metrics 대응
+
+| 이름·label | 의미 |
+| --- | --- |
+| http_server_requests_seconds_count/sum/bucket | Micrometer HTTP, method/status/uri template/outcome/exception/error |
+| jvm_memory_used_bytes | area·id별 JVM 메모리 |
+| hikaricp_connections_active/idle/pending/max | pool별 실제 연결 |
+| hikaricp_connections_timeout_total | pool 획득 timeout |
+| jdbc_connections_active/idle/max/min | DataSource 관측 |
+| db_transactions_total | role=primary, outcome=committed/rolled_back/failed |
+| db_transaction_duration_seconds_count/sum/max | 실제 transaction 완료 시점까지 |
+
+native 재시작 후 scrape에서 `db_transactions_total{outcome="committed",role="primary"} 1.0`과
+`http_server_requests_seconds_count{error="none",exception="none",method="POST",outcome="SUCCESS",status="201",uri="/v1/reservations"} 1`을 확인했습니다.
+재시작은 process counter를 초기화합니다. 재생 transaction도 committed 한 건이며 신규 예약 수가 아닙니다.
+request ID·멱등 key·raw query를 labels에 넣지 않습니다.
+http.completed는 Servlet 처리 완료이고 실제 상대 수신·무손실 전달을 뜻하지 않습니다.
+
+## 미검증·제한
+
+- PostgreSQL·SQLite·H2 PostgreSQL compatibility mode는 검증하지 않았습니다.
+- 실제 디스크 오류·전원 차단·운영 부하·성능/용량 수치·클러스터·Replica·sharding은 범위 밖입니다.
+- JDBC commit 결과가 불명인 외부 저장 장애를 임의로 재시도하지 않습니다. 같은 키 조회·재생으로 확인합니다.
+- H2 DDL의 transactional rollback을 PostgreSQL과 동일하게 주장하지 않습니다. 실패 migration은 시작을 차단합니다.
+- 키 만료·정리·인증 scope·분산 작업·운영 로그 수집/보존·알림은 구현하지 않았습니다.
+- Docker 플랫폼은 arm64에서 검증하며 다른 CPU/OS 결과로 확대하지 않습니다.
