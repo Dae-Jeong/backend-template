@@ -22,7 +22,8 @@ flowchart TB
 ```
 
 환경별 선택은 로컬 Prometheus·Grafana, stg·prd Sentry 연동 방향으로 합의했습니다.
-로컬 구현·검증 범위는 [FastAPI 모니터링](implementations/fastapi.md#로컬-모니터링)이 소유합니다.
+공유 수집기의 실행은 [로컬 모니터링](implementations/local-monitoring.md), 지표의 정의와 검증 범위는
+[각 구현 문서](implementations/README.md)가 소유합니다.
 stg·prd의 Sentry SDK·DSN·샘플링·민감정보 제외·오류 중복 처리는 후속 작업입니다.
 Sentry 선택만으로 운영 metrics 보관·대시보드·경보 구성이 완료된 것으로 보지 않습니다.
 검색 서버 SDK·직접 전송 코드는 기본 제공하지 않습니다.

@@ -5,7 +5,7 @@ NestJS·Express·SQLite 예약 예제입니다. 생성자 DI, 명시적 HTTP DTO
 
 2026-09-08: build·typecheck·lint, unit/실제 DB/프로세스 시험 32개와 HTTP 시험 15개를
 통과했습니다. 네이티브 18083의 실제 DB 예약·재생과 새 디렉터리의 locked 설치·빌드·migration·예약도 확인했습니다.
-컨테이너 실행과 공유 Prometheus·Grafana·MkDocs 통합은 중앙 검증 대기입니다.
+컨테이너 예약·재시작 재생과 공유 Prometheus·Grafana 수집도 확인했습니다.
 [구현 설계](../../design/implementations/nestjs.md) ·
 [검증 기록](../../design/implementations/nestjs-verification.md).
 
@@ -98,7 +98,19 @@ node scripts/toolchain.mjs lint
 시험은 OS 임시 포트·임시 파일만 사용합니다. `drizzle-kit`의 이전 esbuild-kit 하위 패키지 deprecation
 경고는 남아 있지만 stable CLI 동작을 확인했습니다. `@scarf/scarf` 설치 telemetry는 실행하지 않습니다.
 
-## 컨테이너 — 중앙 검증 대기
+## 컨테이너 실행
+
+저장소 루트에서 실행합니다.
+
+```sh
+export DB_PRIMARY_URL=file:/app/data/template.db
+./scripts/compose.sh nestjs up --build --wait api
+./scripts/compose.sh nestjs exec -T api pnpm db:seed widget 1
+```
+
+[Swagger](http://127.0.0.1:18084/docs)에서 예약을 호출하거나 위 curl의 포트를 18084로 바꿉니다.
+종료는 `./scripts/compose.sh nestjs stop api`이며 데이터는 유지됩니다.
+공유 수집기는 [로컬 모니터링](../../design/implementations/local-monitoring.md)을 따릅니다.
 
 Docker context는 `ts/nestjs`, `NODE_VERSION` build arg는 `.node-version`에서 중앙 Compose가 전달합니다.
 pnpm은 `packageManager`에서 읽습니다. 내부 포트 3000, 게시 `127.0.0.1:18084`, non-root UID/GID 10001,

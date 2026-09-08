@@ -1,6 +1,6 @@
 # TypeScript / NestJS 구현 설계
 
-Status: SQLite 예약·동시성·멱등성 구현 및 네이티브 검증 · 컨테이너·공유 관측 통합은 중앙 검증 대기 · 2026-09-08
+Status: SQLite 예약·동시성·멱등성 1차 구현·검증 및 로컬 통합 완료 · 2026-09-08
 
 이 문서는 NestJS의 조립·DI·수명·HTTP·저장 경계를 소유합니다.
 파일 배치는 [폴더와 역할](nestjs-structure.md), 착수 순서는 [작업 계획](nestjs-tasks.md),
@@ -16,7 +16,7 @@ Status: SQLite 예약·동시성·멱등성 구현 및 네이티브 검증 · �
 | 앱 조립 | 첫 프로젝트 Module은 `AppModule` 하나입니다. 내장 DI에 Controller와 Provider를 등록합니다. |
 | 코드 스타일 | Controller·주입받는 Service는 클래스, 값 변환·계산은 일반 함수와 readonly 타입을 사용합니다. |
 | 테스트 | `src/` 옆 `test/`에 단위·통합·HTTP 시험을 둡니다. |
-| 로컬 주소 | [중앙 포트 배정](README.md#로컬-포트-배정)에 따라 native 18083을 검증했습니다. 컨테이너 18084는 중앙 검증 대기입니다. |
+| 로컬 주소 | [포트 배정](README.md#로컬-포트-배정)에 따라 native 18083·컨테이너 18084를 검증했습니다. |
 
 Node.js 24.20.0 LTS·Nest 12.0.1·CLI 12.0.0·pnpm 12.3.4를 고정했습니다.
 Node 정확 버전은 `.node-version`, pnpm 정확 버전은 `packageManager`가 소유하며
@@ -168,7 +168,7 @@ Nest hook이나 DI만으로 여러 DB·외부 호출의 원자성이 생기지�
 | 영역 | 상태와 후속 |
 | --- | --- |
 | HTTP | 현재 정적 API 경로는 공식 Swagger 생성 path/method로 405를 판정합니다. 관측은 공개 Express `req.route.path`를 사용하며 매개변수 template 집계를 시험했습니다. private router 접근은 없습니다. 동적 경로의 405·다른 adapter는 추가 시험이 필요합니다. |
-| 수집·컨테이너 | Dockerfile·시작 script는 구현했습니다. Compose·Prometheus·Grafana 실제 연결과 MkDocs 통합은 중앙 검증 대기입니다. |
+| 수집·컨테이너 | Compose·Prometheus·Grafana 실제 연결과 MkDocs 통합을 확인했습니다. 실행은 [로컬 모니터링](local-monitoring.md)을 따릅니다. |
 | PostgreSQL | driver·schema·migration 교체 뒤 해당 DB의 경합·복구 시험을 다시 수행해야 합니다. 인스턴스를 만들지 않았습니다. |
 | 운영 | 인증·감사 영속성·외부 SDK·네트워크 파일시스템·OS stdout 장애·부하 지연/용량 보장은 미검증입니다. |
 

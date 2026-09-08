@@ -1,8 +1,7 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–8 구현·자동 검증 수행, 중앙 컨테이너 통합 확인 중 · 2026-09-08
+Status: Task 1–8 1차 구현·검증 완료 · 컨테이너·공유 수집·가이드 통합 · 2026-09-08
 
-현재 작업은 실제 구현 승인에 따라 진행합니다. 설계의 과거 미착수 상태는 구현 중단 조건이 아닙니다.
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
 
@@ -24,8 +23,8 @@ Status: Task 1–8 구현·자동 검증 수행, 중앙 컨테이너 통합 확�
 - `2d745e0`: Java 25·HTTP 계약·최초 H2 예약·실제 HTTP/file DB 시험.
 - `a65cb26`: 중앙 리뷰의 전역 guard 제거·자동 no-db·Java 단일 정본·실패/프로세스/관측 검증,
   clean 시험 27개 통과.
-  후속 문서 commit과 중앙 결과는 검증 기록 및 coordinator 보고에서 구분합니다.
+  후속 오류 번역 수정과 통합 결과는 검증 기록에서 확인합니다.
 
 V1의 초기 guard는 V2 migration에서 제거합니다. 과거 migration을 지우거나 덮어쓰지 않고
 기존 예약·재생 결과를 보존한 업그레이드를 시험했습니다.
-중앙 root README·구현 목록·Compose·수집기·문서 메뉴는 이 worker의 수정 범위 밖입니다.
+공통 실행·수집·문서 메뉴는 main에 통합했습니다.

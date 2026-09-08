@@ -88,7 +88,7 @@ Nest는 순환 의존용 `forwardRef()`를 제공하지만 이 템플릿은 호�
 
 | 도입 단계 | 추가 후보 | 배치 이유 |
 | --- | --- | --- |
-| 관측 | `observability/logging.ts`, `observability/metrics.ts`, `http/observation.middleware.ts` | 라이브러리 설정과 HTTP 종료 감지를 나눕니다. |
+| 관측 | `observability/logging.ts`, `observability/metrics.ts`, `http/observation.ts` | 라이브러리 설정과 HTTP 종료 감지를 나눕니다. |
 | DB 기반 | `database/`의 연결·수명 파일, 도구가 생성한 migration 경로 | pool과 schema 변경은 업무 파일 밖에서 관리합니다. |
 | 예약 | `repositories/reservations.repository.ts`, `models/`의 저장 모델 | transaction client를 받아 저장하고 내부 결과로 반환합니다. |
 | 예약 계약 | Controller·Service·DTO·contract·error의 `reservations` 파일 | 기존 역할 폴더에서 같은 기능명으로 연결합니다. |

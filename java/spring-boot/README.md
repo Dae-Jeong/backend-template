@@ -88,17 +88,23 @@ DB 설정은 `DB_PRIMARY_URL`, `DB_USERNAME`, `DB_PASSWORD`,
 잠금 대기시간은 H2 URL의 `LOCK_TIMEOUT` 밀리초 값입니다.
 `SPRING_PROFILES_ACTIVE=no-db`로 명시적으로 DB를 끌 수도 있습니다.
 
-저장소 루트에서:
+저장소 루트에서 실행합니다. H2 파일은 한 JVM만 열 수 있으므로 seed 전에 앱을 중지합니다.
 
 ```sh
-docker build --build-arg JAVA_VERSION="$(cat java/spring-boot/.java-version)" \
-  -t backend-template-spring:local java/spring-boot
+export DB_PRIMARY_URL='jdbc:h2:file:/app/data/template;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=1000;WRITE_DELAY=0'
+./scripts/compose.sh spring-boot build api
+./scripts/compose.sh spring-boot stop api
+./scripts/compose.sh spring-boot run --rm --no-deps api --seed --app.seed.product-id=demo --app.seed.stock=10
+./scripts/compose.sh spring-boot up --no-build --wait api
 ```
 
 중앙 Compose가 실행·포트·모니터링을 관리합니다. 별도 Compose는 만들지 않습니다.
 컨테이너는 UID 10001, 내부 8080, 데이터 `/app/data`, 게시 `127.0.0.1:18086`입니다.
 DB 활성 URL 예시는 `jdbc:h2:file:/app/data/template;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=1000;WRITE_DELAY=0`입니다.
 Docker HEALTHCHECK는 curl로 `/health/ready`를 확인합니다.
+[Swagger](http://127.0.0.1:18086/docs)에서 예약을 호출하거나 위 curl의 포트를 18086으로 바꿉니다.
+종료는 `./scripts/compose.sh spring-boot stop api`이며 데이터는 유지됩니다.
+공유 수집기는 [로컬 모니터링](../../design/implementations/local-monitoring.md)을 따릅니다.
 
 ## 검증과 기능 추가
 

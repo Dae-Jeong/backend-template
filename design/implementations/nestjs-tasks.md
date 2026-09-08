@@ -1,6 +1,6 @@
 # NestJS 작업 계획
 
-Status: Task 1–7 구현·네이티브 검증, Task 8 복사 실행·언어 가이드 작성 완료 · 컨테이너·공유 통합은 중앙 검증 대기 · 2026-09-08
+Status: Task 1–8 1차 구현·검증 완료 · 컨테이너·공유 수집·가이드 통합 · 2026-09-08
 
 목표는 작은 실행 앱에서 시작해 예약의 동시성·멱등성까지 한 사이클을 검증하는 것입니다.
 승인된 구현에 따라 Nest 앱과 로컬 파일 SQLite 예제를 만들었습니다. 공유 운영 인프라·계정·수집기는 변경하지 않았습니다.
@@ -11,11 +11,11 @@ Status: Task 1–7 구현·네이티브 검증, Task 8 복사 실행·언어 가
 | Task 1 | 공식 CLI 12 ESM 생성물 보존, Node·Nest·pnpm 고정, 설정·빌드·typecheck·lint와 native 18083 확인 |
 | Task 2 | 생성자 DI·CLOCK 교체·앱 격리·readiness·초기화/listen 실패 정리·SIGTERM drain 검증 |
 | Task 3 | DTO·422(잘못된 JSON 포함)·Problem·405 Allow·request ID·OpenAPI·특수 응답 검증 |
-| Task 4 | Pino·앱별 Prometheus registry·송신/실행 분리·오류 격리 검증; 실제 공유 수집은 중앙 대기 |
+| Task 4 | Pino·앱별 Prometheus registry·송신/실행 분리·오류 격리·공유 Prometheus 수집 검증 |
 | Task 5 | 중앙 승인 Drizzle·worker SQLite·tarn, 공식 migration 생성/적용, pool/lock timeout·반환·계측 검증 |
 | Task 6 | 동일 transaction client로 차감·예약·멱등 저장; 실제 COMMIT 실패와 rollback 실패 정리 검증 |
 | Task 7 | 독립 프로세스 경합·동일/충돌 키·commit 전후 SIGKILL·응답 유실·재시작 재생 검증 |
-| Task 8 | 사용 안내·Dockerfile·시작 script 작성, 새 디렉터리 locked 설치·빌드·migration·예약 201 확인; 컨테이너·MkDocs는 중앙 통합 대기 |
+| Task 8 | 새 디렉터리 locked 설치·빌드·migration·예약, 컨테이너 재시작 재생·공유 대시보드·MkDocs 통합 |
 
 코드 checkpoint: `56cf0c7` 공식 생성물, `521e098` 설정·DI·수명,
 `5c3eb31` HTTP·관측·SQLite 예약·프로세스 복구 검증,

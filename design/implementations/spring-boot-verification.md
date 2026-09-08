@@ -90,18 +90,26 @@ docker build --build-arg JAVA_VERSION="$(cat java/spring-boot/.java-version)" \
 Docker locked 빌드는 통과했습니다. JAVA_VERSION 기본값을 두지 않으므로 Docker 정적 lint의
 InvalidDefaultArgInFrom 경고 2개가 있으며 실제 명령은 필수 arg를 전달합니다.
 이미지는 curl healthcheck·UID10001·/app/data·내부8080을 사용합니다.
-중앙 Compose의 127.0.0.1:18086 실행·수집기 확인 결과는 중앙 통합 보고와 구분합니다.
+Compose의 127.0.0.1:18086 실행·수집기 확인 결과는 아래 통합 검증에 기록합니다.
 
 `a65cb26` 구현 이미지 manifest는 `sha256:898234f975f4901933b91c4d2c9c47cba6176d91eacb3b21def9557cfeee779b`입니다.
-이후 `53db988`의 오류 번역 수정은 중앙 Compose 이미지 재빌드·실행 대상으로 전달했습니다.
+이후 `53db988`의 오류 번역 수정까지 포함한 Compose 이미지를 다시 빌드·실행했습니다.
 `git archive a65cb26 java/spring-boot`를 `/tmp/spring-template-copy-a65cb26/`에 풀어
 새 위치에서 `./gradlew bootJar --no-daemon --console=plain`을 실행해 통과했습니다.
 복사한 start.sh를 독립 임시 포트 57097에서 실행해 DB 비활성 readiness 200·인사 응답·예약 404를 확인했습니다.
 
-이 checkout의 `uv tool run --from uv==0.12.10 uv run --project docs --locked mkdocs build --strict --site-dir /tmp/spring-docs-site`는
-Spring 설계 4개가 참조하는 `java/spring-boot/README.md`를 기존 중앙 hook이 아직 발행하지 않아
-링크 경고 4개로 실패했습니다. 공통 `docs/hooks.py`·`mkdocs.yml`은 worker 소유가 아니므로 변경하지 않았고
-README 발행·탐색 연결과 통합 strict build를 중앙에 전달했습니다.
+분리 작업 중 발생한 README 발행 링크 경고는 main의 문서 hook·메뉴 통합으로 해결했고 MkDocs strict build가 통과했습니다.
+
+## 로컬 통합 검증
+
+2026-09-08 main에서 `.java-version`을 읽는 공통 Compose build와 UID 10001 실행을 확인했습니다.
+DB 비활성 시 health 200·예약 404·OpenAPI 제외, H2 활성 시 migration·seed·예약 201이 통과했습니다.
+입력 오류 3종은 422·Problem·request ID, GET 예약은 405·Allow를 반환했습니다.
+동일 body 재생·다른 입력의 동일 키 409·없는 상품 404가 통과했습니다.
+재고 3에서 최초 예약 후 6개 병렬 요청은 성공 2개·품절 4개였고, 최종 이미지로 교체한 뒤에도 원래 body를 재생했습니다.
+Prometheus job=spring-boot UP과 Micrometer HTTP/JVM/Hikari·업무 transaction 지표를 확인했습니다.
+Grafana의 Spring Boot 대시보드를 PC 화면에서 확인했습니다.
+소규모 요청 후 컨테이너 메모리 단일 측정은 203.5 MiB / 한도 512 MiB이며 운영 용량 보장이 아닙니다.
 
 ## 구현 commit
 

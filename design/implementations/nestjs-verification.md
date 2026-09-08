@@ -1,6 +1,6 @@
 # NestJS 검증 계획
 
-Status: 네이티브·SQLite·복구 자동 시험 검증 기록 · 컨테이너·공유 관측 통합은 중앙 검증 대기 · 2026-09-08
+Status: 네이티브·SQLite·복구 자동 시험 및 로컬 컨테이너 통합 검증 기록 · 2026-09-08
 
 이 문서는 [구현 설계](nestjs.md)의 통과 조건과 이후 실행 증거를 소유합니다.
 FastAPI의 시험 통과를 NestJS의 검증 결과로 대신하지 않습니다.
@@ -119,7 +119,8 @@ health·metrics·204·OpenAPI 예외, 라벨 cardinality와 logger/metrics 실�
 상품/멱등키 원문이 없었습니다. stderr는 비었고 소유 PID에 SIGTERM을 보내 종료·포트 해제를 확인했습니다.
 
 단일 smoke RSS는 303632 KiB(약 297 MiB)였습니다. 기본 pool 상한 2는 지연 생성됩니다.
-이 값은 처리량·최대 부하·컨테이너 메모리 예산 보장이 아니며 컨테이너 제한 하의 측정은 중앙 후속입니다.
+이 값은 처리량·최대 부하·컨테이너 메모리 예산 보장이 아닙니다.
+컨테이너의 소규모 요청·재시작 후 단일 측정은 50.45 MiB / 한도 512 MiB였습니다.
 
 ## 복사 실행
 
@@ -128,7 +129,7 @@ lockfile SHA-256은 전후 동일했습니다. 이후 `src`를 실행 경로에�
 빌드된 앱의 OS 임시 포트 55473 예약 201이 통과했습니다. 이 검증은 macOS native 복사 실행이며
 Linux 컨테이너 검증을 대신하지 않습니다.
 
-## 중앙 통합 요구와 남은 검증
+## 로컬 통합 검증
 
 중앙 Compose는 `ts/nestjs` context와 `.node-version`에서 읽은 `NODE_VERSION` build arg,
 `SERVER_HOST=0.0.0.0`·`SERVER_PORT=3000`, 게시 포트 `127.0.0.1:18084:3000`을 연결합니다.
@@ -136,7 +137,15 @@ DB 사용 시 `DB_PRIMARY_URL=file:/app/data/template.db`와 UID/GID 10001이 �
 runtime COPY는 UID/GID 10001 소유로 설정해 pnpm workspace 파일의 생성 권한 0600도 읽을 수 있습니다.
 시작 script는 공식 migration 후 앱을 exec하며 seed는 명시적으로 실행합니다.
 
-Docker build·18084 Compose 실행·UID 10001 writable volume·공유 Prometheus/Grafana 수집·중단 및 MkDocs 렌더는
-중앙 coordinator가 수행합니다. N-OBS-04와 Task 8의 컨테이너/가이드 통합은 그 결과까지 대기입니다.
+2026-09-08 main 통합에서 공식 Compose 명령으로 image build와 UID 10001 실행을 확인했습니다.
+DB 비활성 시 health 200·예약 GET/POST 404·OpenAPI 제외, 활성 시 migration·seed·예약 201을 확인했습니다.
+입력 오류 3종은 422·Problem·request ID, GET 예약은 405·Allow를 반환했습니다.
+원래 body 재생·다른 입력의 동일 키 409·없는 상품 404가 통과했습니다.
+재고 3에서 최초 예약 후 6개 병렬 요청은 성공 2개·품절 4개였고, 컨테이너 재시작 후 원래 body를 재생했습니다.
+Prometheus job=nestjs UP·HTTP/DB 지표·Grafana query와 MkDocs strict build를 확인했습니다.
+N-OBS-04·Task 8의 로컬 통합 범위까지 완료했습니다.
+
+## 미검증 범위
+
 실제 OS stdout 고장·디스크 장애·네트워크 파일시스템·PostgreSQL·운영 인증·외부 SDK·부하 p95/p99·비용은 미검증입니다.
 예외 메시지·SQL·입력 원문은 공개하지 않으므로 상세 OS 원인 진단은 기본 로그만으로 보장하지 않습니다.

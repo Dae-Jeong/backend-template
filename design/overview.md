@@ -2,12 +2,14 @@
 
 백엔드 서비스를 시작할 때 반복해서 필요한 설정·의존성 주입·자원 수명·오류 처리·로깅·계측의 기준을 정리하고, 언어와 프레임워크에 맞는 시작점을 만드는 프로젝트입니다.
 
-**첫 구현은 설정·DI·관측 기반과 SQLite 예약의 동시성·멱등성까지 구현·검증했습니다.** 실행은 [로컬 실행 가이드](implementations/quickstart.md)에서 시작합니다. PostgreSQL 전환과 인증·운영 연동은 후속 범위입니다.
+**FastAPI·NestJS·Spring Boot에서 설정·DI·관측 기반과 예약의 동시성·멱등성을 구현했습니다.**
+[구현별 안내](implementations/README.md)에서 실행 방법과 실제 검증 범위를 선택합니다.
+PostgreSQL 전환과 인증·운영 연동은 후속 범위입니다.
 
 ## 가이드 읽기
 
-처음 사용한다면 **[앱 실행](implementations/quickstart.md) → [내 서비스에 적용](implementations/service-guide.md)** 순서로 읽습니다.
-구조가 궁금하면 [폴더와 역할](implementations/fastapi-structure.md)을, 문제가 생기면 [문제 해결](implementations/service-guide.md#로컬에서-막혔을-때)과 [검증 기록](implementations/fastapi-verification.md)을 확인합니다.
+처음 사용한다면 **[구현 선택](implementations/README.md) → 해당 구현의 실행·기능 추가 안내** 순서로 읽습니다.
+구조나 문제가 궁금하면 같은 구현의 폴더 안내·검증 기록으로 이동합니다.
 
 검색·목차·Mermaid를 갖춘 MkDocs 가이드는 저장소 루트에서 실행합니다.
 
@@ -62,21 +64,24 @@ flowchart TB
 
 ## 사용할 방식
 
-로컬 컨테이너는 저장소 루트에서 실행합니다. 현재 선택 가능한 구현은 `fastapi`입니다.
+로컬 컨테이너는 저장소 루트에서 `fastapi`, `nestjs`, `spring-boot`를 선택합니다.
 
 ```sh
 ./scripts/compose.sh fastapi up --build --wait
-# 모니터링도 함께 실행
-./scripts/compose.sh fastapi --profile monitoring up --build --wait
-# 모니터링만 중지
+# 다른 구현도 별도 포트와 데이터 볼륨으로 실행
+./scripts/compose.sh nestjs up --build --wait api
+./scripts/compose.sh spring-boot up --build --wait api
+# 공유 모니터링은 한 번만 실행
+./scripts/compose.sh fastapi --profile monitoring up --wait prometheus grafana
+# 공유 모니터링 중지
 ./scripts/compose.sh fastapi stop grafana prometheus
-# 전체 중지, 보관 데이터 유지
-./scripts/compose.sh fastapi --profile monitoring stop
 ```
 
 스크립트는 구현을 선택한 뒤 나머지 인자를 Docker Compose에 전달합니다.
 모니터링은 기본 비활성이며, 이미 실행 중인 모니터링은 profile을 생략해도 자동 종료되지 않습니다.
 앱별 Dockerfile·환경 예시와 사용 안내는 각 구현이 소유합니다. 이 Compose는 로컬 전용입니다.
+기본 DB는 비활성이며 예약 실험은 각 실행 안내의 URL·migration·seed 순서를 따릅니다.
+수집 경로와 대시보드의 의미는 [로컬 모니터링](implementations/local-monitoring.md)에서 확인합니다.
 
 소비 저장소에서 이 저장소를 Git submodule로 연결해 특정 커밋을 고정하고, 구현된 템플릿을 서비스 경로로 복사하는 방식을 계획합니다. submodule 연결과 런타임 패키지 import는 다릅니다. 템플릿 원본 업데이트가 복사한 서비스에 자동 적용되지는 않습니다.
 

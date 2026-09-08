@@ -29,6 +29,8 @@ watch:
   - README.md
   - design
   - python/fastapi/README.md
+  - ts/nestjs/README.md
+  - java/spring-boot/README.md
 validation:
   nav:
     omitted_files: warn
@@ -53,8 +55,11 @@ markdown_extensions:
 nav:
   - 사용 가이드:
       - 어디서 시작할까요: README.md
-      - 로컬 실행: design/implementations/quickstart.md
-      - 내 서비스에 적용: design/implementations/service-guide.md
+      - FastAPI 실행: design/implementations/quickstart.md
+      - NestJS 실행: ts/nestjs/README.md
+      - Spring Boot 실행: java/spring-boot/README.md
+      - 로컬 모니터링: design/implementations/local-monitoring.md
+      - FastAPI 서비스 적용: design/implementations/service-guide.md
   - 상세 설명:
       - 프로젝트 개요: design/overview.md
       - 구현별 현황: design/implementations/README.md
@@ -80,8 +85,8 @@ nav:
           - 검증 결과와 재현: design/implementations/fastapi-verification.md
           - 완료 작업과 후속 범위: design/implementations/fastapi-tasks.md
       - NestJS:
-          - 검증 계획: design/implementations/nestjs-verification.md
+          - 검증 결과와 재현: design/implementations/nestjs-verification.md
           - 단계별 작업: design/implementations/nestjs-tasks.md
       - Spring Boot:
-          - 검증 계획: design/implementations/spring-boot-verification.md
+          - 검증 결과와 재현: design/implementations/spring-boot-verification.md
           - 단계별 작업: design/implementations/spring-boot-tasks.md
