@@ -12,6 +12,7 @@
 
 첫 구현 후보는 FastAPI 예제 API·Settings·DI·lifespan·로깅·metrics·테스트·Docker Compose입니다.
 FastAPI의 파일 역할과 소비 프로젝트의 변경 기준은 [폴더 구조 안내](fastapi-structure.md)에서 확인합니다.
+실제 서비스에 가져갈 파일과 기능 연결 순서는 [서비스 적용 가이드](service-guide.md)에서 확인합니다.
 초기 기반 이후 SQLite와 로컬 Prometheus·Grafana를 추가했습니다. 인증·채팅·외부 API·운영 모니터링은 후속입니다.
 
 1차 완료 목표는 초기 기반을 거쳐 한정 수량 예약의 동시성·멱등성까지 구현·검증하는 것입니다.

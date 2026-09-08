@@ -4,6 +4,24 @@
 
 **첫 구현은 설정·DI·관측 기반과 SQLite 예약의 동시성·멱등성까지 구현·검증했습니다.** 실행은 [첫 구현 사용 안내](python/fastapi/README.md#예약-예제-빠른-시작)에서 시작합니다. PostgreSQL 전환과 인증·운영 연동은 후속 범위입니다.
 
+## 가이드 읽기
+
+처음 사용한다면 **[앱 실행](python/fastapi/README.md#예약-예제-빠른-시작) → [내 서비스에 적용](design/implementations/service-guide.md) → [구조와 역할](design/implementations/fastapi-structure.md)** 순서로 읽습니다.
+문제가 생기면 [문제 해결](design/implementations/service-guide.md#로컬에서-막혔을-때)과 [검증 기록](design/implementations/fastapi-verification.md)을 확인합니다.
+
+검색·목차·Mermaid를 갖춘 MkDocs 가이드는 저장소 루트에서 실행합니다.
+
+```sh
+uv tool run --from uv==0.12.10 uv run --project docs --locked mkdocs serve
+```
+
+[로컬 가이드 열기](http://127.0.0.1:18090) · 종료는 실행 터미널에서 Ctrl+C입니다.
+문서 도구는 `docs/pyproject.toml`·`docs/uv.lock`으로 앱과 분리해 관리합니다.
+링크·목차·anchor 검사는 같은 명령에서 `serve` 대신 `build --strict`로 실행합니다.
+
+가이드는 README·`design/`·구현 README 원문을 직접 읽습니다. 문서를 수정하면 로컬 화면에 반영되며 별도 본문 복사본을 만들지 않습니다.
+`mkdocs.yml`은 메뉴·화면 설정, `docs/hooks.py`는 문서만 사이트에 포함하는 경계입니다. `site/`는 Git에서 제외한 빌드 결과입니다.
+
 ## 한눈에 보는 구조
 
 ```mermaid

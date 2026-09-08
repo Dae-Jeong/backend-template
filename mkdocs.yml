@@ -1,0 +1,69 @@
+site_name: Backend Template 가이드
+site_description: 로컬 실행부터 서비스 적용과 동시성·멱등성 검증까지
+docs_dir: docs
+site_dir: site
+dev_addr: 127.0.0.1:18090
+theme:
+  name: material
+  language: ko
+  font: false
+  palette:
+    primary: teal
+    accent: teal
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+plugins:
+  - search:
+      lang: [en]
+      separator: '[\s\-·/()]+'
+      pipeline: []
+hooks:
+  - docs/hooks.py
+watch:
+  - README.md
+  - design
+  - python/fastapi/README.md
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+markdown_extensions:
+  - tables
+  - admonition
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - 시작하기:
+      - 가이드 개요: README.md
+      - FastAPI 실행: python/fastapi/README.md
+      - 내 서비스에 적용: design/implementations/service-guide.md
+  - 구조와 개발:
+      - 폴더와 역할: design/implementations/fastapi-structure.md
+      - FastAPI 구현 계약: design/implementations/fastapi.md
+      - DI 선택 근거: design/implementations/fastapi-di-options.md
+      - 개발 원칙: design/engineering.md
+  - 관측과 검증:
+      - 로깅과 Metrics: design/observability.md
+      - 검증 결과와 재현: design/implementations/fastapi-verification.md
+      - 완료 작업과 후속 범위: design/implementations/fastapi-tasks.md
+  - 설계 참고:
+      - 문서 소유권: design/README.md
+      - 공통 Backend: design/backend.md
+      - Runtime과 성능: design/runtime-review.md
+      - 구현별 현황: design/implementations/README.md

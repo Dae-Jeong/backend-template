@@ -1,6 +1,6 @@
 # FastAPI DI 선택안
 
-Status: B안 사용자 선택·clock DI 구현 검증 · A안 미설치·미실행 · 2026-09-07
+Status: B안 선택·clock 및 Primary Session DI 구현 검증 · A안 미설치·미실행 · 2026-09-08
 
 이 문서는 FastAPI 구현의 DI 선택만 소유합니다. 공통 경계는 [Backend](../backend.md),
 현재 구현 방향은 [FastAPI 설계](fastapi.md)가 소유합니다. 아래 권장은 공식 API를 바탕으로 한 프로젝트 판단이며
@@ -113,16 +113,16 @@ lifespan 자원 factory 교체는 요청 provider override와 별도로 앱 조�
 | 대상 | 두 안의 수명·책임 |
 | --- | --- |
 | Settings·clock | 앱 조립 시 주입한 값·함수; 요청마다 설정을 다시 읽지 않습니다. |
-| 향후 pool·HTTP client | 앱/worker별 lifespan 자원; 실제 자원 도입 시에만 생성합니다. |
-| 향후 DB session | 요청 또는 업무 작업별 생성·정리; 동시 task끼리 공유하지 않습니다. |
+| DB pool·후속 HTTP client | 앱/worker별 lifespan 자원; DB 설정이 있을 때 Engine을 생성합니다. HTTP client는 후속입니다. |
+| DB session | 요청 또는 업무 작업별 생성·정리; 동시 task끼리 공유하지 않습니다. |
 | 트랜잭션 | 업무가 commit/rollback 시점을 명시합니다. 응답 전 저장 성공이 확정되어야 합니다. |
 | background·stream | 요청 session을 계속 빌려 쓰지 않고 필요한 작업의 자원 범위를 별도로 정합니다. |
 | 멱등 기록·수량 차감 | 실제 DB의 제약·트랜잭션이 보호합니다. DI cache나 Singleton으로 중복 처리를 보장하지 않습니다. |
 
 FastAPI는 같은 의존성을 요청 안에서 기본적으로 재사용합니다. 이는 요청 간 공유나 동시성 제어가 아닙니다.
 `yield` 의존성은 기본 request scope에서 응답 뒤 정리하고, `scope="function"`은 핸들러 반환 뒤·응답 전 정리합니다.
-DB 없는 현재 단계에 session provider를 미리 추가하지 않습니다. DB 도입 시 JSON 응답과 streaming의 자원 요구를
-구분하여 scope를 선택하고 commit은 어느 scope에서도 teardown에 숨기지 않습니다.
+현재 예약 JSON API의 PrimarySessionDep는 `scope="function"`으로 제공합니다.
+streaming은 해당 기능을 도입할 때 자원 요구를 구분하며 commit은 어느 scope에서도 teardown에 숨기지 않습니다.
 
 ## 권장과 첫 검증
 

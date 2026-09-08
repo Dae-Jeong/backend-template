@@ -78,7 +78,8 @@ flowchart TD
 `bootstrap/lifespan.py`와 `routers/health.py`에 수명·health를 구현했습니다.
 `create_app(..., prepare=prepare_resources)`가 준비 함수를 명시적으로 받습니다.
 준비 함수는 앱과 `AsyncExitStack`을 받아 자원 획득 직후 정리를 등록합니다.
-현재 기본 준비 함수는 외부 자원이 없어 아무 자원도 만들지 않으며, 대역 주입으로 실패·취소를 시험합니다.
+기본 준비 함수는 DB 설정이 있으면 Engine을 생성하고 연결 확인 후 Session factory를 등록합니다.
+DB 미설정이면 자원을 만들지 않습니다. 실제 SQLite와 대역 주입으로 실패·취소를 시험합니다.
 정리는 역순으로 실행하며 cleanup 오류가 있어도 나머지를 시도합니다.
 원래 시작 실패·취소가 있으면 이를 다시 전파하고 cleanup 오류는 원인 체인으로 보존합니다.
 
@@ -107,8 +108,8 @@ flowchart TD
 factory/import에서 I/O·프로세스 logger 변경을 하지 않습니다. handler는 프로세스 공용이며 앱별 문맥은 이벤트에 주입합니다.
 서버 로그 설정이 앱 설정을 덮거나 handler를 중복 등록하지 않도록 실행 조립 지점에서 소유합니다.
 설정 실패 시 입력값을 제외한 필드 이름·고정 오류 코드만 stderr에 출력합니다.
-향후 pool/client를 만들 때 lifespan에서 획득 직후 AsyncExitStack 등에 정리를 등록합니다.
-초기 버전에는 외부 자원이 없으며 초기화 실패는 가짜 async 자원으로 검증합니다.
+Engine은 생성 직후 AsyncExitStack에 dispose를 등록합니다. 추가 client도 같은 자원 소유권을 따릅니다.
+초기화 실패는 실제 SQLite 연결 실패와 가짜 async 자원으로 검증합니다.
 
 FastAPI `Depends`는 API/provider 경계에서 사용하고 업무 함수는 일반 인자를 받습니다.
 `get_clock` provider가 시간 공급 함수를 반환하고, 업무 함수가 호출하도록 예제를 구성합니다.
@@ -131,9 +132,9 @@ FastAPI는 `schemas/responses.py`의 `Success[T]`·`Problem`·오류 enum으로 
 
 `http/errors.py`가 RequestValidationError·HTTPException·예상 밖 Exception을 공개 오류로 변환합니다.
 기본 422 응답의 input·context·msg는 반환하지 않고 첫 20개 오류의 공개 위치·고정 코드만 제공합니다.
-현재 공개 위치는 `query.name`입니다. 새 입력을 추가할 때 승인한 위치와 코드 매핑을 함께 확장하며,
+현재 공개 위치는 `query.name`, `body.product_id`, `header.Idempotency-Key`입니다. 새 입력을 추가할 때 승인한 위치와 코드 매핑을 함께 확장하며,
 알 수 없는 위치는 빈 배열, 알려지지 않은 검증 오류는 INVALID로 축약합니다.
-500은 고정 INTERNAL_ERROR입니다. 업무 충돌·멱등 오류는 해당 기능 도입 시 추가합니다.
+500은 고정 INTERNAL_ERROR입니다. 예약의 업무 충돌·멱등 오류는 아래 예약 계약으로 연결합니다.
 
 `HttpObservation`이 요청 ID를 로그 설정 여부와 관계없이 생성해 request state와 응답 헤더에 전달합니다.
 오류 handler는 같은 ID를 본문에 넣습니다. bare factory 테스트에서는 오류 handler가 ID를 생성하지만
@@ -164,7 +165,7 @@ Status: 공통 예외·HTTP handler 구현 및 테스트 대역 검증 · 2026-0
 | `services/reservations.py` · 기능 도입 시 | 업무 조건을 판단해 구체 예외를 발생시킵니다. HTTPException·응답 schema를 사용하지 않습니다. |
 | `http/errors.py` · 구현 | `application_error`에 상태·공개 코드를 고정해 구체 예외의 handler로 사용하며 기존 `problem_response`를 재사용합니다. |
 | `schemas/responses.py` · 기존 유지 | 공개 ErrorCode와 Problem 계약입니다. 새 업무 코드는 기능 도입 시 추가하며 업무 예외가 이 모듈을 역으로 import하지 않습니다. |
-| `bootstrap/app.py` · 등록 위치 | 실제 업무 예외를 도입할 때 앱 생성 중 명시적으로 handler를 등록합니다. 현재 운영 router에는 업무 예외가 없어 추가 등록하지 않습니다. |
+| `bootstrap/app.py` · 등록 위치 | DB 설정이 있으면 예약 router와 업무 예외·DB 오류 handler를 명시적으로 등록합니다. |
 
 ```mermaid
 flowchart LR
@@ -320,7 +321,7 @@ CancelledError를 삼키지 않고 cleanup 후 다시 전파합니다. 관측 �
 
 Status: 단일 API 이미지·Compose 구현 및 linux/arm64 검증 · 2026-09-07
 
-실행 정의는 [Dockerfile](../../python/fastapi/Dockerfile)과 [compose.yaml](../../compose.yaml),
+실행 정의는 [Dockerfile](https://github.com/Dae-Jeong/backend-template/blob/main/python/fastapi/Dockerfile)과 [compose.yaml](https://github.com/Dae-Jeong/backend-template/blob/main/compose.yaml),
 명령·접속 주소는 [사용 안내](../../python/fastapi/README.md#컨테이너-실행)가 소유합니다.
 `docker init`으로 생성한 Python 기본 파일을 기존 uv 프로젝트에 맞게 수정했습니다.
 
@@ -355,9 +356,9 @@ Docker Desktop에서 이미지 빌드·healthy·200/422 응답·Swagger·metrics
 
 Status: Prometheus·Grafana 선택 확장 구현·로컬 검증 · 2026-09-07
 
-[루트 compose.yaml](../../compose.yaml)의 `monitoring` profile을 선택합니다.
+[루트 compose.yaml](https://github.com/Dae-Jeong/backend-template/blob/main/compose.yaml)의 `monitoring` profile을 선택합니다.
 버전·digest·보관·자원 설정은 이 파일, 수집 대상과 대시보드는
-[infra/monitoring/](../../infra/monitoring/), 실행 명령은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)가 소유합니다.
+[infra/monitoring/](https://github.com/Dae-Jeong/backend-template/tree/main/infra/monitoring), 실행 명령은 [사용 안내](../../python/fastapi/README.md#로컬-모니터링)가 소유합니다.
 공식 Prometheus 설정과 Grafana file provisioning을 사용하며 앱에 별도 전송 코드를 추가하지 않습니다.
 
 ```mermaid
@@ -588,7 +589,7 @@ flowchart LR
 `infra/monitoring/grafana/dashboards/db-overview.json`에 점유/상한·Session 수·점유/획득 지연·
 pool timeout·업무 결과/지연을 표시합니다. 기존 provisioning과 Compose를 재사용합니다.
 수집 단절·DB 미설정·관측 표본 없음은 정상 0과 구분하고, 인스턴스별 pool 상한과 전체 합산을 구분합니다.
-실행 순서와 장애 주입의 완료 기준은 [Task 6 실행 단위](fastapi-tasks.md#다음-실행-단위)가 소유합니다.
+실행 순서와 장애 주입의 완료 기준은 [Task 6 실행 단위](fastapi-tasks.md#실행-단위와-완료-기록)가 소유합니다.
 
 근거 확인(2026-09-08): [SQLAlchemy PoolEvents](https://docs.sqlalchemy.org/en/20/core/events.html#sqlalchemy.events.PoolEvents),
 [asyncio event 연결](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#using-events-with-the-asyncio-extension).
