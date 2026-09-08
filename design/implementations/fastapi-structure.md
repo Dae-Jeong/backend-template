@@ -70,7 +70,8 @@ flowchart TD
 | `models/reservations.py` | Core Table·DB 제약·metadata입니다. 외부 요청 schema와 구분합니다. |
 | `contracts/reservations.py` | 불변 업무 결과 타입입니다. HTTP·저장 구현을 import하지 않습니다. |
 | `exceptions/reservations.py`, `exceptions/database.py`, `http/database.py` | 업무/DB 실패 타입과 HTTP 503 변환을 구분합니다. |
-| `migrations/`, `alembic.ini` | 공식 Alembic async scaffold 기반 schema 변경입니다. 앱 시작 시 자동 적용하지 않습니다. |
+| `migrations/`, `alembic.ini` | 공식 Alembic async scaffold 기반 schema 변경입니다. 앱 lifespan에서 적용하지 않습니다. |
+| `scripts/start.sh` | 로컬 컨테이너에서 migration 성공 후 앱을 실행합니다. lifespan 외부의 실행 순서입니다. |
 | `seed.py` | 없는 상품만 생성하는 로컬 CLI입니다. 기존 재고를 초기화하지 않습니다. |
 | `tests/` | 기반·예약·경합·복구 시험입니다. `reservations/process_worker.py`는 독립 프로세스/강제 종료 대역입니다. 소스와 일대일 대응을 강제하지 않습니다. |
 

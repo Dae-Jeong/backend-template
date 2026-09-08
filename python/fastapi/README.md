@@ -11,23 +11,21 @@ FastAPI 0.141.1, Uvicorn 0.52.4로 최소 실행을 확인했습니다.
 
 `DB_PRIMARY_URL`을 비우면 DB 없는 앱이며 예약 endpoint를 등록하지 않습니다. 현재 파일 SQLite만 지원합니다.
 로컬에서는 `mkdir -p data` 후 `.env`에 `DB_PRIMARY_URL=sqlite+aiosqlite:///./data/reservations.db`를 설정합니다.
-Compose에서는 아래 빠른 시작 순서로 migration을 먼저 실행합니다. `/app/data`는 UID 10001이 쓰는 named volume입니다.
+Compose에서는 컨테이너 시작 명령이 migration을 먼저 실행합니다. `/app/data`는 UID 10001이 쓰는 named volume입니다.
 
 pool 크기·overflow·획득 timeout·SQLite 잠금 timeout은 `.env.example`에서 구분합니다.
-시작 시 연결을 확인하고 실패하면 ready가 되지 않습니다. 시작 중 schema/migration은 수행하지 않습니다.
+컨테이너는 DB URL이 있으면 Alembic upgrade 성공 후 앱을 시작합니다. 앱 lifespan은 연결을 확인하며 migration을 수행하지 않습니다.
 DB 계측의 의미와 범위는 [구현 설계](../../design/implementations/fastapi.md#db-계측과-로컬-모니터링-계획)를 참조합니다.
 
 ## 예약 예제 빠른 시작
 
-아래 명령은 **저장소 루트**에서 실행합니다. migration을 적용한 뒤 API를 올립니다.
+아래 명령은 **저장소 루트**에서 실행합니다. 컨테이너가 migration을 적용한 뒤 API를 올립니다.
 이미 같은 DB로 실행 중이라면 호환되는 migration인지 확인한 뒤 적용합니다. 기존 재고·예약은 초기화하지 않습니다.
 
 ```sh
 export DB_PRIMARY_URL=sqlite+aiosqlite:////app/data/reservations.db
-./scripts/compose.sh fastapi build api
-./scripts/compose.sh fastapi run --rm --no-deps api python -m alembic upgrade head
+./scripts/compose.sh fastapi --profile monitoring up --build --wait
 ./scripts/compose.sh fastapi run --rm --no-deps api python -m template_api.seed --product-id demo --stock 10
-./scripts/compose.sh fastapi --profile monitoring up --wait
 
 curl -i http://127.0.0.1:18081/v1/reservations \
   -H 'Content-Type: application/json' \

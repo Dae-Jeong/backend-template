@@ -435,6 +435,26 @@ SQLite는 하나의 writer만 실행하므로 이 방식의 처리량을 Postgre
 실행 명령은 [사용 안내](../../python/fastapi/README.md#예약-예제-빠른-시작), 검증 증거는
 [실행 결과](fastapi-verification.md#예약-동시성멱등성-실행-결과)가 소유합니다.
 
+## 로컬 컨테이너 migration 순서
+
+`python/fastapi/scripts/start.sh`가 컨테이너의 기본 시작 명령입니다.
+Compose가 전달한 `DB_PRIMARY_URL`이 있으면 공식 Alembic CLI로 `/app/alembic.ini`의 `upgrade head`를 실행합니다.
+실패하면 즉시 종료하고 API를 시작하지 않습니다. DB URL이 없으면 migration을 건너뜁니다.
+완료 후 `exec`로 앱 프로세스를 실행해 종료 신호가 전달되도록 합니다.
+
+```mermaid
+flowchart LR
+    START["컨테이너 start.sh"] --> DB{"DB URL 있음?"}
+    DB -->|"있음"| MIGRATE["alembic upgrade head"]
+    DB -->|"없음"| API["exec FastAPI 실행"]
+    MIGRATE -->|"성공"| API
+    MIGRATE -->|"실패"| EXIT["오류 종료 · API 시작 안 함"]
+```
+
+이 순서는 로컬 단일 API 컨테이너의 실행 편의입니다. 네이티브 `python -m template_api.run`은
+사용 안내대로 Alembic을 먼저 실행합니다. 앱 factory·lifespan은 schema를 변경하지 않습니다.
+운영·다중 인스턴스 배포에서 migration 실행 주체와 배포 순서는 별도로 정합니다.
+
 ## DB 연결 기반 계획
 
 Status: SQLite Engine·Session·DI·예약 저장·DB 계측 구현 · PostgreSQL 전환 미구현 · 2026-09-08
@@ -444,13 +464,13 @@ Engine·Session·DI·트랜잭션 수명은 공통으로 유지하고 SQLite PRA
 PostgreSQL 전환 시 드라이버·migration·타입/제약·잠금을 검토하며 실제 DB에서 동시성·멱등성을 다시 검증합니다.
 세부 실행 순서와 완료 기준은 [Task 6 실행 기록](fastapi-tasks.md#실행-단위와-완료-기록)이 소유합니다.
 aiosqlite는 연결별 백그라운드 스레드로 SQLite 작업을 처리하며 SQLite의 단일 writer 제약을 없애지는 않습니다.
-패키지는 `uv add`로 추가하고 lock·현재 Python 호환성을 확인합니다. ORM 모델·migration은 다음 세부 task입니다.
+패키지는 `uv add`로 추가하고 lock·현재 Python 호환성을 확인했습니다. Core Table·Alembic migration도 구현했습니다.
 
 | 순서 | 변경 위치 | 책임·확인 기준 |
 | --- | --- | --- |
 | 6-1 Engine·수명 | `core/database.py`, `core/settings.py`, `bootstrap/lifespan.py` | 앱 수명마다 Engine·Session factory 생성, 연결 확인, 시작 실패 정리, 종료 시 `await engine.dispose()` |
 | 6-2 Session·DI | `dependencies/database.py` | 요청마다 새 AsyncSession 생성·종료, 서비스에 일반 인자로 전달, 동시 task 간 Session 공유 금지 |
-| 6-3 schema·migration | 도구 초기화로 경로 확정 | 예약 모델·고유/수량 제약, Alembic 공식 초기화·revision·upgrade, 앱 시작 중 자동 migration 금지 |
+| 6-3 schema·migration | 도구 초기화로 경로 확정 | 예약 모델·고유/수량 제약, Alembic 공식 초기화·revision·upgrade, 앱 lifespan에서 migration 금지 |
 | 6-4 순차 예약 | `services/`, `repositories/` 등 | 업무가 트랜잭션 범위를 소유하고 repository가 SQL을 수행, 차감·예약 저장의 commit/rollback 검증 |
 
 ```mermaid

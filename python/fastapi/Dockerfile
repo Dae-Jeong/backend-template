@@ -21,9 +21,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 COPY --from=build /app/.venv /app/.venv
 COPY alembic.ini ./
 COPY migrations ./migrations
+COPY scripts/start.sh ./scripts/start.sh
 RUN mkdir /app/data && chown 10001:10001 /app/data
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
     CMD ["python", "-c", "import os; from urllib.request import urlopen; r = urlopen('http://127.0.0.1:' + os.environ.get('SERVER_PORT', '8000') + '/health/ready', timeout=2); r.close()"]
-CMD ["python", "-m", "template_api.run"]
+CMD ["sh", "/app/scripts/start.sh"]

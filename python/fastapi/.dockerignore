@@ -6,6 +6,8 @@
 !uv.lock
 !README.md
 !alembic.ini
+!scripts/
+!scripts/start.sh
 !migrations/
 !migrations/**
 migrations/**/__pycache__/

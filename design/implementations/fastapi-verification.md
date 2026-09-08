@@ -37,9 +37,25 @@ Grafana health는 200이며 실제 DB 화면에서도 UP·점유 0/상한 4·Ses
 공통 DB 대역에 있던 commit 실패 시험을 실제 예약 API에도 추가해 검증 공백을 보완했습니다.
 
 한계: readiness는 시작 연결·자원 준비 확인이며 schema revision 검사나 지속적인 DB 건강 확인은 아닙니다.
-따라서 사용 안내의 migration 선행 순서를 따라야 합니다. 임의 전원 장애·파일 손상·OOM의 무손실,
+로컬 컨테이너는 아래 보완으로 migration을 선행하며 네이티브 실행은 사용 안내의 순서를 따릅니다. 임의 전원 장애·파일 손상·OOM의 무손실,
 PostgreSQL 격리 수준/처리량·다중 worker HTTP 서버의 성능·운영 Sentry·인증/권한은 검증하지 않았습니다.
 이 결과는 로컬 SQLite 1차 완료 판정이며 운영 서비스 전체 준비 완료를 뜻하지 않습니다.
+
+## 로컬 자동 migration 실행 결과
+
+확인일: 2026-09-08. 컨테이너 기본 시작 명령을 `scripts/start.sh`로 연결했습니다.
+이미지 빌드·shell 문법·Compose 설정 검사를 통과했습니다. 동일 이미지의 일회성 Compose 컨테이너에서
+`/tmp`의 격리 DB로 다음을 확인했으며 시험 컨테이너는 `run --rm`으로 정리했습니다.
+
+- 빈 DB에서 시작 명령만 실행해 Alembic head와 예약 테이블 생성 후 readiness 200.
+- 상품 재고 7개를 저장한 뒤 같은 DB로 재시작해 재고 유지·readiness 200.
+- DB URL 없이 시작해 readiness 200·예약 router 미등록.
+- 존재하지 않는 revision을 가진 시험 DB에서 Alembic 오류 종료·API 시작 이벤트 없음.
+- 정상 시작한 프로세스에 SIGTERM을 보내 `application.stopped`·`server.stopped` 확인.
+
+실제 로컬 Compose 앱도 새 이미지로 시작해 API·Prometheus·Grafana healthy와 readiness 200을 확인했습니다.
+기존 95개 pytest의 Python 업무 코드는 변경하지 않았으며 이번 검증은 이미지의 시작·실패·종료 경로를 대상으로 합니다.
+계약과 흐름은 [로컬 컨테이너 migration 순서](fastapi.md#로컬-컨테이너-migration-순서)에 있습니다.
 
 ## DB 기반 실행 결과
 

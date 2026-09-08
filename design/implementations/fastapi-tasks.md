@@ -2,6 +2,10 @@
 
 Status: Task 1~8 SQLite 1차 구현·검증 완료 · PostgreSQL 전환은 후속 · 2026-09-08
 
+마무리 보완: 사용자 승인으로 로컬 컨테이너의 migration 성공 → API 시작 순서를 연결했습니다.
+새 DB·재시작 보존·DB 미사용·migration 실패 시 시작 차단·SIGTERM 종료의
+[컨테이너 검증](fastapi-verification.md#로컬-자동-migration-실행-결과)을 완료했습니다.
+
 1차 완료 목표는 한정 수량 예약에서 동시성·멱등성·응답 유실 후 재시도를 구현하고 검증한 상태입니다.
 uv 사용은 확정했습니다. Python 선택은 [구현 설계](fastapi.md#구성과-의존성)가 소유합니다.
 각 task의 내용을 사용자와 맞춘 뒤 구현하고, 결과와 한계를 함께 확인한 후 다음 task로 넘어갑니다.
