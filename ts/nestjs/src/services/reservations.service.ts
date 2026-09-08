@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Primary } from '../database/primary.js';
 import { ReservationsRepository } from '../repositories/reservations.repository.js';
+import type { ReservationClient } from '../repositories/reservations.repository.js';
 import { DatabaseMetrics } from '../observability/database.metrics.js';
 import type { TransactionOutcome } from '../contracts/observation.contract.js';
 import { CLOCK } from '../contracts/clock.contract.js';
@@ -28,21 +29,7 @@ export class ReservationsService {
         const result = await connection.db.transaction(
           async (client) => {
             try {
-              const existing = await this.repository.replay(
-                client,
-                key,
-                productId,
-              );
-              if (existing) return { reservation: existing, replayed: true };
-              await this.repository.decreaseStock(client, productId);
-              const reservation = {
-                reservationId: randomUUID().replaceAll('-', ''),
-                productId,
-                createdAt: this.clock(),
-              };
-              await this.repository.saveReservation(client, reservation);
-              await this.repository.saveIdempotency(client, key, reservation);
-              return { reservation, replayed: false };
+              return await this.reserveInTransaction(client, productId, key);
             } catch (error) {
               bodyError = error;
               throw error;
@@ -56,6 +43,8 @@ export class ReservationsService {
         await this.primary.release(connection);
       }
     } catch (error) {
+      // Drizzle rethrows the callback error only after rollback succeeds.
+      // COMMIT or ROLLBACK failures are different errors and remain 'failed'.
       if (bodyError !== undefined && error === bodyError)
         outcome = 'rolled_back';
       if (isDatabaseBusy(error)) throw new DatabaseBusy();
@@ -63,5 +52,24 @@ export class ReservationsService {
     } finally {
       this.metrics.transaction(outcome, (performance.now() - started) / 1000);
     }
+  }
+
+  private async reserveInTransaction(
+    client: ReservationClient,
+    productId: string,
+    key: string,
+  ): Promise<ReservationResult> {
+    const existing = await this.repository.replay(client, key, productId);
+    if (existing) return { reservation: existing, replayed: true };
+
+    await this.repository.decreaseStock(client, productId);
+    const reservation = {
+      reservationId: randomUUID().replaceAll('-', ''),
+      productId,
+      createdAt: this.clock(),
+    };
+    await this.repository.saveReservation(client, reservation);
+    await this.repository.saveIdempotency(client, key, reservation);
+    return { reservation, replayed: false };
   }
 }

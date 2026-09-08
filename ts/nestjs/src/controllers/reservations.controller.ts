@@ -38,11 +38,14 @@ export class ReservationsController {
     },
   })
   async reserve(
-    @Body(inputPipe(ReserveRequestDto, 'body')) body: ReserveRequestDto,
+    @Body(inputPipe(ReserveRequestDto, 'body', ['product_id']))
+    body: ReserveRequestDto,
     @Headers('idempotency-key') key: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ): Promise<ReservationResponseDto> {
-    const headers = (await inputPipe(IdempotencyKeyDto, 'header').transform(
+    const headers = (await inputPipe(IdempotencyKeyDto, 'header', [
+      'Idempotency-Key',
+    ]).transform(
       { 'Idempotency-Key': key },
       { type: 'body' },
     )) as IdempotencyKeyDto;

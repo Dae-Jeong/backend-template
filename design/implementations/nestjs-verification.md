@@ -145,6 +145,30 @@ DB 비활성 시 health 200·예약 GET/POST 404·OpenAPI 제외, 활성 시 mig
 Prometheus job=nestjs UP·HTTP/DB 지표·Grafana query와 MkDocs strict build를 확인했습니다.
 N-OBS-04·Task 8의 로컬 통합 범위까지 완료했습니다.
 
+## Task 9 검증 — 2026-09-08
+
+기준 `1b3cc63`에서 HTTP 오류 분류·공개 필드 계약·예약 업무 본문을 정리했습니다.
+macOS arm64, 고정 Node 24.20.0·pnpm 12.3.4 wrapper로 13:16 KST에 실행했습니다.
+`ts/nestjs/`에서 수행한 명령과 결과입니다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `node scripts/toolchain.mjs install --frozen-lockfile` | 통과, lockfile 변경 없음 |
+| `node scripts/toolchain.mjs build` | 통과 |
+| `node scripts/toolchain.mjs typecheck` | 통과 |
+| `node scripts/toolchain.mjs lint` | 통과 |
+| `node scripts/toolchain.mjs test` | 6 files, 40 tests 통과 |
+| `node scripts/toolchain.mjs test:e2e` | 2 files, 15 tests 통과 |
+
+새 `test/unit/validation.spec.ts`의 8개 회귀는 다른 DTO 필드의 공개 위치, 누락·null·숫자,
+명시적 trim·암묵 변환 금지, unknown 필드/값 숨김·20개 제한, 검증되지만 공개하지 않은 필드를 확인합니다.
+기존 시험은 변경하지 않았으며 실제 COMMIT 실패·rollback 실패의 dirty 연결 폐기·worker 종료,
+독립 프로세스 동시성·멱등성·관측 종료·오류 헤더·parser 실패를 다시 통과했습니다.
+Drizzle 설치 소스의 callback→COMMIT→실패 시 ROLLBACK→원래 오류 재전달 순서를 확인하고,
+`bodyError` identity 판정과 Service의 동일 transaction client·release·계측 순서를 유지했습니다.
+시험은 기존 fixture의 임시 SQLite DB와 OS 임시 포트를 사용했습니다.
+이번 작업은 실행 중인 서비스·컨테이너·공유 수집기를 변경하거나 재검증하지 않았습니다.
+
 ## 미검증 범위
 
 실제 OS stdout 고장·디스크 장애·네트워크 파일시스템·PostgreSQL·운영 인증·외부 SDK·부하 p95/p99·비용은 미검증입니다.

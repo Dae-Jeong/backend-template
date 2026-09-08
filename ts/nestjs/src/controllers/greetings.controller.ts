@@ -28,7 +28,8 @@ export class GreetingsController {
   })
   @ApiOkResponse({ type: GreetingResponseDto })
   greet(
-    @Query(inputPipe(GreetingRequestDto, 'query')) query: GreetingRequestDto,
+    @Query(inputPipe(GreetingRequestDto, 'query', ['name']))
+    query: GreetingRequestDto,
   ): GreetingResponseDto {
     const result = this.greetings.greet(query.name);
     return {

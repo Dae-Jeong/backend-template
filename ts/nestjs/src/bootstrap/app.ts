@@ -7,6 +7,7 @@ import { Logging } from '../observability/logging.js';
 import { configureOpenApi } from '../http/openapi.js';
 import { observeHttp, observation } from '../http/observation.js';
 import { sendProblem } from '../http/problem.js';
+import { isParserFailure } from '../http/validation.js';
 import type { Request, Response, NextFunction } from 'express';
 import type { ExpressAdapter } from '@nestjs/platform-express';
 
@@ -33,11 +34,7 @@ export function configureApp(app: INestApplication): void {
       response: Response,
       next: NextFunction,
     ) => {
-      if (
-        error instanceof Error &&
-        'type' in error &&
-        error.type === 'entity.parse.failed'
-      ) {
+      if (isParserFailure(error)) {
         observation(response)?.endExecution();
         sendProblem(response, 422, 'INVALID_INPUT', [
           { location: [], code: 'INVALID' },

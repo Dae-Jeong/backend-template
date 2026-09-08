@@ -80,6 +80,8 @@ AppModule은 참조를 연결하고 업무를 실행하지 않습니다. 프로�
 readonly 타입으로 두고, Controller가 DTO를 업무 인자로 바꿉니다.
 `ValidationPipe`는 허용 필드 검증과 초과 필드 거절을 켜고, 전역 암묵적 타입 변환은 켜지 않습니다.
 query·path의 변환이 필요한 곳에서 명시적인 Pipe를 사용합니다.
+Controller는 `inputPipe(Dto, location, ['공개필드'])`로 오류에 공개할 DTO 필드를 명시합니다.
+목록은 DTO의 필드 타입으로 검사하며, 미지정·unknown 필드의 오류 위치는 비우고 오류는 최대 20개만 반환합니다.
 [Validation](https://docs.nestjs.com/techniques/validation), 확인일: 2026-09-08.
 
 [공통 HTTP 계약](../backend.md#http-응답-계약)을 다음 경계에서 적용합니다.

@@ -9,6 +9,14 @@ export class InvalidInput extends HttpException {
   }
 }
 
+export function isParserFailure(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'type' in error &&
+    error.type === 'entity.parse.failed'
+  );
+}
+
 function fieldCode(error: ValidationError): string {
   const rules = error.constraints ?? {};
   if ('isDefined' in rules) return 'REQUIRED';
@@ -18,10 +26,12 @@ function fieldCode(error: ValidationError): string {
   return 'INVALID';
 }
 
-export function inputPipe(
-  type: Type<unknown>,
+export function inputPipe<T>(
+  type: Type<T>,
   location: 'query' | 'body' | 'header',
+  publicFields: readonly (keyof T & string)[],
 ): ValidationPipe {
+  const fields = new Set<string>(publicFields);
   return new ValidationPipe({
     expectedType: type,
     transform: true,
@@ -32,11 +42,7 @@ export function inputPipe(
     exceptionFactory: (errors: ValidationError[]) =>
       new InvalidInput(
         errors.slice(0, 20).map((error) => ({
-          location: {
-            query: ['name'],
-            body: ['product_id'],
-            header: ['Idempotency-Key'],
-          }[location].includes(error.property)
+          location: fields.has(error.property)
             ? [location, error.property]
             : [],
           code: fieldCode(error),
