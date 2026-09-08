@@ -24,7 +24,9 @@ public class GreetingController {
 
     @GetMapping("/v1/greetings")
     public ApiResponse<GreetingResponse> greet(@RequestParam(required = false) String name) {
-        var result = service.greet(Inputs.text(name == null ? null : name.strip(), "query", "name", 80, false));
-        return new ApiResponse<>(new GreetingResponse(result.message(), result.generatedAt()));
+        var validatedName = Inputs.text(name == null ? null : name.strip(), "query", "name", 80);
+        var result = service.greet(validatedName);
+        var response = new GreetingResponse(result.message(), result.generatedAt());
+        return new ApiResponse<>(response);
     }
 }

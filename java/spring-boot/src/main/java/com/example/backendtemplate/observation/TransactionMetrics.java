@@ -27,7 +27,9 @@ public class TransactionMetrics implements TransactionExecutionListener {
 
     @Override
     public void afterBegin(TransactionExecution transaction, Throwable failure) {
-        if (failure != null) finish(transaction, "failed");
+        if (failure != null) {
+            finish(transaction, "failed");
+        }
     }
 
     @Override
@@ -48,7 +50,9 @@ public class TransactionMetrics implements TransactionExecutionListener {
 
     private void finish(TransactionExecution transaction, String outcome) {
         var started = active.remove(transaction);
-        if (started == null) return;
+        if (started == null) {
+            return;
+        }
         try {
             registry.counter("db.transactions", "role", "primary", "outcome", outcome).increment();
             registry.timer("db.transaction.duration", "role", "primary", "outcome", outcome)

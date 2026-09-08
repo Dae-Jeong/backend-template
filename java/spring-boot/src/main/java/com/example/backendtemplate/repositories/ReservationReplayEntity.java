@@ -1,7 +1,14 @@
 package com.example.backendtemplate.repositories;
 
 import com.example.backendtemplate.contracts.Reservation;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
@@ -20,7 +27,9 @@ class ReservationReplayEntity {
     @Convert(converter = UtcTimestampConverter.class)
     @Column(name = "created_at", length = 40, nullable = false)
     private Instant createdAt;
+
     protected ReservationReplayEntity() {}
+
     ReservationReplayEntity(String key, Reservation value, ReservationEntity reservation) {
         this.key = key;
         this.productId = value.productId();
@@ -28,5 +37,8 @@ class ReservationReplayEntity {
         this.reservationId = value.reservationId();
         this.createdAt = value.createdAt();
     }
-    Reservation toContract() { return new Reservation(reservationId, productId, createdAt); }
+
+    Reservation toContract() {
+        return new Reservation(reservationId, productId, createdAt);
+    }
 }

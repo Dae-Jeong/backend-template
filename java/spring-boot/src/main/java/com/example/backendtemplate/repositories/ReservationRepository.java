@@ -29,18 +29,25 @@ public class ReservationRepository {
         try {
             entities.flush();
         } catch (ConstraintViolationException failure) {
-            if ("23505".equals(failure.getSQLState()) && failure.getSQL() != null
-                    && failure.getSQL().contains("insert into reservation_claims")) {
+            if (isH2ClaimInsertConflict(failure)) {
                 throw new IdempotencyClaimed();
             }
             throw failure;
         }
     }
 
+    private static boolean isH2ClaimInsertConflict(ConstraintViolationException failure) {
+        // The claim table has only one unique constraint: its idempotency-key primary key.
+        return "23505".equals(failure.getSQLState()) && failure.getSQL() != null
+                && failure.getSQL().contains("insert into reservation_claims");
+    }
+
     public Optional<Reservation> replay(String key, String productId) {
         return replays.findByKey(key).map(row -> {
             var value = row.toContract();
-            if (!value.productId().equals(productId)) throw new ReservationFailure(Reason.IDEMPOTENCY_CONFLICT);
+            if (!value.productId().equals(productId)) {
+                throw new ReservationFailure(Reason.IDEMPOTENCY_CONFLICT);
+            }
             return value;
         });
     }

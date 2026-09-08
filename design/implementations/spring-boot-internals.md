@@ -103,6 +103,7 @@ Repository는 entity를 `Reservation` contract로 변환하고, Controller는 DB
 claim 충돌 예외는 **실패한 transaction이 종료된 뒤** Attempts에서 잡습니다.
 실패한 JPA transaction 안에서 예외만 삼키고 조회를 계속하면 정상 commit을 기대할 수 없기 때문입니다.
 대기 중 선행 transaction이 rollback하면 후행 INSERT가 성공할 수도 있고, 잠금 시간 초과면 별도 실패가 됩니다.
+`ReservationRepository.isH2ClaimInsertConflict()`는 H2 23505와 claim INSERT SQL만 판별합니다.
 모든 DB 오류를 중복 요청으로 취급하지 않으며 구체적인 충돌 분류는 [구현 제약](spring-boot.md#h2와-transaction)을 따릅니다.
 
 여기서 Java `synchronized`로 Service를 잠가도 다른 JVM의 요청은 보호하지 못합니다.

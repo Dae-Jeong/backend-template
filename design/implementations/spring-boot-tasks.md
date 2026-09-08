@@ -1,6 +1,6 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–9 구현·자동 시험·JPA 컨테이너·공유 수집·가이드 통합 검증 완료 · 2026-09-08
+Status: Task 1–10 구현·자동 시험·중앙 코드 검토 완료 · 2026-09-08
 
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
@@ -17,6 +17,7 @@ Status: Task 1–9 구현·자동 시험·JPA 컨테이너·공유 수집·가�
 | 7 경합·멱등·복구 | 키별 충돌 복구·독립 상품 진행·TCP 프로세스 경합·embedded 재시작 | HttpDatabaseTest·ProcessRecoveryTest·TransactionFailureTest |
 | 8 사용 가이드 | 복사 후 빌드·DB 비활성/활성·seed·API 추가 안내 | README 명령·복사 검증 및 중앙 통합 기록 참조 |
 | 9 JPA 전환 | Boot 관리 JPA·Hibernate, 기존 H2 schema·계약 보존 | strict clean test bootJar, 34개·11 suites·실패 0 |
+| 10 코드 읽기 비용 개선 | Problem 직접 생성·입력 의미 명시·예약 전용 오류 분기 제거·claim 판별명·표현 정리 | strict clean test bootJar, 35개·11 suites·실패 0 |
 
 ## 단계별 commit
 
@@ -42,9 +43,22 @@ Java 구현의 JdbcClient 저장 경계를 JPA entity·Spring Data repository로
 - Spring 사용/구조/검증 문서에 실제 결과와 중앙 Docker·수집 검증의 남은 범위가 기록됨.
 
 결과:
+
 - `4301427` 승인 설계, `6025aaf` 구현·시험. 기존 V1/V2 migration 수정은 없습니다.
 - EntityManager persist·Spring Data 조회/조건부 JPQL·VARCHAR UTC mapping, 단일 JpaTransactionManager가 구현됐습니다.
 - JPA flush 경합·stale entity·batch FK 순서·전체 rollback·commit 실패·rollback 응답 실패·no-db·schema mismatch·기존 nanosecond HTTP 재생을 확인했습니다.
 - `./gradlew clean test bootJar --no-daemon --console=plain`이 34개·11 suites·실패/오류/skip 0으로 통과했습니다.
 - 사용·구조·설계·검증 문서와 공통 구현 표를 갱신했습니다. Docker 18086의 기존 H2 데이터 보존·재시작 재생·동시 HTTP·Prometheus 수집도 통과했습니다.
 - 최종 통합 증거는 [JPA 로컬 통합 검증](spring-boot-verification.md#jpa-로컬-통합-검증)에 있습니다.
+
+## Task 10. 계약을 유지하는 코드 정리
+
+목표: HTTP·transaction·DB·관측 계약을 유지하면서 불필요한 중간 객체와 불명확한 호출을 줄입니다.
+
+결과:
+- `ApiExceptionHandler.problem()`은 공개 Problem을 직접 만들고 request ID를 한 번 조회합니다. HTTP status와 업무 code의 이름을 구분했습니다.
+- 예약 필드 오류는 기존 deserializer의 `InvalidInput`으로 표현하며 공통 handler의 예약 전용 DatabindException 분기를 제거했습니다.
+- `Inputs.text`·`Inputs.token`, 응답 지역 변수, 명시적 import와 일관된 분기·접근자·들여쓰기로 읽기 비용을 줄였습니다.
+- `isH2ClaimInsertConflict()`는 기존 H2 SQLState와 INSERT SQL 조건을 그대로 사용합니다. transaction·flush·FK·시각·완료 metrics 동작은 유지합니다.
+- 누락·null·숫자·boolean·배열·객체·unknown field·잘못된 JSON의 공개 422 location/code 회귀 시험을 추가했습니다. 전체 명령과 결과는 [Task 10 검증](spring-boot-verification.md#task-10-코드-정리-검증)에 있습니다.
+- 중앙 코드 검토를 완료했습니다. 실행 중인 서비스·공유 DB·Compose는 변경하지 않았으며 이번 코드 정리에는 컨테이너 재배포를 포함하지 않습니다.

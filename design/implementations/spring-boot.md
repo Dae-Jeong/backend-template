@@ -1,6 +1,6 @@
 # Java / Spring Boot 구현 설계
 
-Status: Task 1–9 구현·자동 시험·JPA 로컬 통합 검증 완료 · 2026-09-08
+Status: Task 1–10 구현·자동 시험 완료 · 2026-09-08
 
 ## JPA 저장 경계
 
@@ -77,7 +77,7 @@ graceful shutdown은 유한 시간이며 테스트에서는 SIGTERM 중 진행 H
 예약의 작은 전용 deserializer가 누락(REQUIRED)과 명시적 null/숫자(INVALID)를 구분합니다.
 공개 field location만 노출하고 외부 입력·예외 원문을 오류에 포함하지 않습니다.
 404·405·업무 오류·500도 같은 Problem DTO이며 `Allow`, `Retry-After`를 보존합니다.
-Spring ProblemDetail의 status/title을 사용하되 요청 URI를 자동 instance에 넣지 않도록 공개 DTO로 제한합니다.
+HttpStatus의 title(422는 기존 `Unprocessable Entity`)과 status로 공개 Problem DTO를 직접 만들며 요청 URI를 instance에 넣지 않습니다.
 서버 생성 32자리 request ID는 헤더·오류 body·로그에서 일치합니다.
 
 ## H2와 transaction

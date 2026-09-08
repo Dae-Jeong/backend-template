@@ -46,6 +46,31 @@ Java compiler `-Xlint:all,-processing,-serial`·`-Werror`와 strict dependency l
 lockfile 생성은 공식 `./gradlew test bootJar --write-locks`로 수행했습니다.
 migration 파일은 공식 `flyway help add` 확인 후 `flyway add -add.version=1|2 -add.timestamp=never ...`로 만들었습니다.
 
+## Task 10 코드 정리 검증
+
+2026-09-08, `1b3cc63` 기반 공유 checkout에서 Spring Boot 소유 경로만 수정했습니다.
+지정된 `/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home/bin/java`의 존재와 Java 25.0.4.1을 확인하고
+Gradle `--help`를 확인한 뒤 명령별 JAVA_HOME·PATH로 실행했습니다. 머신 기본값·라이브러리·ORM·migration·Compose는 변경하지 않았습니다.
+
+```sh
+cd java/spring-boot
+JAVA_HOME=/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home \
+PATH=/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home/bin:$PATH \
+./gradlew clean test bootJar --no-daemon --console=plain
+```
+
+최종 코드 기준 **35개 시험·11 suites·실패 0·오류 0·skip 0**, 41초에 통과했습니다.
+기존 34개 시험은 유지하고 실제 HTTP의 공개 오류 위치·코드 회귀 시험 하나를 추가했습니다.
+누락은 `body/product_id`·REQUIRED, null·숫자·boolean·배열·객체는 같은 위치·INVALID,
+unknown field·잘못된 JSON은 빈 위치·INVALID임을 확인합니다. type/title/status와 request ID의 body/header 일치도 검사합니다.
+예약 전용 DatabindException 분기 없이 기존 deserializer의 InvalidInput만으로 이 계약이 유지됩니다.
+기존 전체 시험이 no-db·proxy·rollback/commit 실패·claim 경합·JPQL flush/clear·FK 순서·nanosecond replay·실제 완료 metrics를 검증했습니다.
+`git diff --check`도 통과했습니다. 로그는 `/tmp/spring-task10-build.log`, HTML/JUnit XML은 기존 build 경로입니다.
+
+임시 DB·OS 임시 포트를 쓰는 기존 시험만 실행했으며 실행 중인 로컬 서비스·공유 DB는 건드리지 않았습니다.
+중앙에서 코드 차이와 JUnit XML의 결과를 확인했습니다. 이번 변경의 Docker 배포·공유 수집 검증은 수행하지 않았으며
+H2 claim table의 단일 PK·Hibernate INSERT SQL에 의존하는 기존 분류 제한도 유지합니다.
+
 ## Task 9 JPA 검증
 
 2026-09-08, 기존 `origin/main`을 정상 fast-forward merge한 뒤 승인 설계 `4301427`을 먼저 기록했습니다.

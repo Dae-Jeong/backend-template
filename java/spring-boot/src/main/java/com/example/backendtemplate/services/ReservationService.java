@@ -23,7 +23,9 @@ public class ReservationService {
     @Transactional(rollbackFor = Exception.class)
     public ReservationResult reserve(String productId, String key) {
         var replay = repository.replay(key, productId);
-        if (replay.isPresent()) return new ReservationResult(replay.get(), true);
+        if (replay.isPresent()) {
+            return new ReservationResult(replay.get(), true);
+        }
         repository.claim(key);
         repository.decreaseStock(productId);
         var reservation = new Reservation(UUID.randomUUID().toString().replace("-", ""), productId, clock.instant());
@@ -33,7 +35,9 @@ public class ReservationService {
 
     @Transactional(rollbackFor = Exception.class)
     public int seed(String productId, int stock) {
-        if (stock < 0) throw new IllegalArgumentException("Stock must be nonnegative");
+        if (stock < 0) {
+            throw new IllegalArgumentException("Stock must be nonnegative");
+        }
         return repository.seed(productId, stock);
     }
 

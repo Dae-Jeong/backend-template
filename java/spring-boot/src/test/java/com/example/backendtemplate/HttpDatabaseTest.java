@@ -135,6 +135,28 @@ class HttpDatabaseTest {
     }
 
     @Test
+    void inputErrorsPreservePublicLocationsAndCodes() throws Exception {
+        var cases = Map.of(
+                "{}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"REQUIRED\"}]",
+                "{\"product_id\":null}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"INVALID\"}]",
+                "{\"product_id\":3}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"INVALID\"}]",
+                "{\"product_id\":true}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"INVALID\"}]",
+                "{\"product_id\":[]}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"INVALID\"}]",
+                "{\"product_id\":{\"private\":1}}", "[{\"location\":[\"body\",\"product_id\"],\"code\":\"INVALID\"}]",
+                "{\"product_id\":\"demo\",\"private\":1}", "[{\"location\":[],\"code\":\"INVALID\"}]",
+                "{", "[{\"location\":[],\"code\":\"INVALID\"}]");
+        for (var entry : cases.entrySet()) {
+            var response = request("POST", "/v1/reservations", entry.getKey(), "valid");
+            problem(response, 422, "INVALID_INPUT");
+            assertThat(json(response).get("type").asString()).isEqualTo("about:blank");
+            assertThat(json(response).get("title").asString()).isEqualTo("Unprocessable Entity");
+            assertThat(json(response).get("status").asInt()).isEqualTo(422);
+            assertThat(json(response).get("errors")).isEqualTo(JSON.readTree(entry.getValue()));
+        }
+        assertThat(state()).containsExactly(1, 0, 0);
+    }
+
+    @Test
     void replayConflictAndSoldOut() throws Exception {
         var first = reserve("same", "demo");
         assertThat(first.statusCode()).isEqualTo(201);

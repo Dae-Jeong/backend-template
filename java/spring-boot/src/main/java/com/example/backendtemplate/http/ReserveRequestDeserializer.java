@@ -11,11 +11,19 @@ public class ReserveRequestDeserializer extends ValueDeserializer<ReserveRequest
     @Override
     public ReserveRequest deserialize(JsonParser parser, DeserializationContext context) {
         JsonNode body = parser.readValueAsTree();
-        if (!body.isObject()) throw new InvalidInput();
+        if (!body.isObject()) {
+            throw new InvalidInput();
+        }
         JsonNode product = body.get("product_id");
-        if (product == null) throw new InvalidInput("body", "product_id", "REQUIRED");
-        if (!product.isString()) throw new InvalidInput("body", "product_id", "INVALID");
-        if (body.size() != 1) throw new InvalidInput();
+        if (product == null) {
+            throw new InvalidInput("body", "product_id", "REQUIRED");
+        }
+        if (!product.isString()) {
+            throw new InvalidInput("body", "product_id", "INVALID");
+        }
+        if (body.size() != 1) {
+            throw new InvalidInput();
+        }
         return new ReserveRequest(product.asString());
     }
 }

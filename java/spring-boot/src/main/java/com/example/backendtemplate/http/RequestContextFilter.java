@@ -89,7 +89,9 @@ public class RequestContextFilter extends OncePerRequestFilter {
 
     private void complete(HttpServletRequest request, HttpServletResponse response,
             long started, AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) return;
+        if (!completed.compareAndSet(false, true)) {
+            return;
+        }
         var previous = MDC.getCopyOfContextMap();
         try {
             MDC.put("app.work.id", requestId(request));
@@ -109,8 +111,11 @@ public class RequestContextFilter extends OncePerRequestFilter {
         } catch (RuntimeException ignored) {
             // Telemetry cannot change the business outcome.
         } finally {
-            if (previous == null) MDC.clear();
-            else MDC.setContextMap(previous);
+            if (previous == null) {
+                MDC.clear();
+            } else {
+                MDC.setContextMap(previous);
+            }
         }
     }
 }
