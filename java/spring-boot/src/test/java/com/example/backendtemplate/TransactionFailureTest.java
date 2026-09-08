@@ -117,6 +117,17 @@ class TransactionFailureTest {
     }
 
     @Test
+    void transactionBeginFailureIsNotReportedAsPoolTimeout() throws Exception {
+        source.failBegin.set(true);
+        var failure = reserve();
+        assertThat(failure.statusCode()).isEqualTo(500);
+        assertThat(failure.body()).contains("INTERNAL_ERROR").doesNotContain("DATABASE_POOL_TIMEOUT", "private");
+        assertThat(failure.headers().firstValue("Retry-After")).isEmpty();
+        unchanged();
+        assertThat(reserve().statusCode()).isEqualTo(201);
+    }
+
+    @Test
     void storageConstraintFailureRollsBackAllWrites() throws Exception {
         try (var connection = DriverManager.getConnection(url, "sa", "");
                 var sql = connection.createStatement()) {
@@ -162,6 +173,7 @@ class TransactionFailureTest {
     static class FaultDataSource extends DelegatingDataSource implements AutoCloseable {
         final HikariDataSource pool;
         final AtomicBoolean failCommit = new AtomicBoolean();
+        final AtomicBoolean failBegin = new AtomicBoolean();
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
 
@@ -175,6 +187,10 @@ class TransactionFailureTest {
             Connection connection = super.getConnection();
             return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
                     new Class<?>[]{Connection.class}, (proxy, method, args) -> {
+                        if (method.getName().equals("setAutoCommit") && Boolean.FALSE.equals(args[0])
+                                && failBegin.compareAndSet(true, false)) {
+                            throw new SQLNonTransientConnectionException("private transaction begin failure", "08006");
+                        }
                         if (method.getName().equals("commit") && failCommit.compareAndSet(true, false)) {
                             entered.countDown();
                             if (!release.await(10, TimeUnit.SECONDS)) throw new SQLException("fault gate timed out");

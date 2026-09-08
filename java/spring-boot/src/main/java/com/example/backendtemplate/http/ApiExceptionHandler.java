@@ -38,7 +38,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             headers.set("Retry-After", "1");
             return problem(503, "DATABASE_BUSY", null, headers, request);
         }
-        if (error instanceof CannotCreateTransactionException || error instanceof CannotGetJdbcConnectionException) {
+        if ((error instanceof CannotCreateTransactionException || error instanceof CannotGetJdbcConnectionException)
+                && error.getCause() instanceof java.sql.SQLTransientConnectionException) {
             headers.set("Retry-After", "1");
             return problem(503, "DATABASE_POOL_TIMEOUT", null, headers, request);
         }
