@@ -2,6 +2,7 @@
 
 백엔드 서비스를 만들고 동시성·멱등성까지 실험하는 시작점입니다.
 현재 FastAPI·SQLite 구현을 제공합니다.
+NestJS·Spring Boot는 [구현 설계와 포트 배정](design/implementations/README.md#병행-구현-준비)을 준비했으며 실행 코드는 미구현입니다.
 
 ## 가이드 읽기
 
