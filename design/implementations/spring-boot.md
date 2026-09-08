@@ -48,8 +48,8 @@ flowchart TB
 | 관측 | Actuator·Micrometer·SLF4J·Boot ECS JSON |
 | 문서 | Springdoc 3.1.1, 실제 OpenAPI HTTP 응답 검증 |
 
-JDK·JVM·Gradle의 역할과 `.java-version`이 빌드·실행에 적용되는 위치는
-[JDK와 실행 이해](spring-boot-jdk.md)가 소유합니다. 버전별 실행 증거는 검증 기록을 봅니다.
+객체 공유·transaction proxy·영속성 context와 JDK API의 동작 이유는
+[로직과 내부 동작](spring-boot-internals.md)을 봅니다. 빌드 입력은 구현 README, 실행 증거는 검증 기록이 소유합니다.
 
 ## 조립과 수명
 
@@ -87,27 +87,8 @@ H2 file DB는 JVM 재시작 사이에 예약 결과를 보존합니다. 앱 실�
 AUTO_SERVER·H2 console·PostgreSQL compatibility mode는 기본 실행에 사용하지 않습니다.
 H2 시험은 PostgreSQL 또는 SQLite의 잠금·driver 검증이 아닙니다.
 
-```mermaid
-sequenceDiagram
-    participant C as Controller
-    participant A as ReservationAttempts
-    participant S as ReservationService proxy
-    participant R as Repository / Primary
-    C->>A: reserve(product, key)
-    A->>S: reserve
-    S->>R: replay 조회 → unique claim → 조건부 재고 UPDATE
-    S->>R: 예약 + 저장 결과 INSERT
-    alt 신규 성공
-        S->>R: commit
-        S-->>A: 결과
-    else 같은 키의 동시 승자 존재
-        S->>R: claim 충돌 transaction rollback
-        S-->>A: IdempotencyClaimed
-        A->>S: 새 read transaction으로 replay
-        S-->>A: 원래 결과 또는 입력 충돌
-    end
-    A-->>C: commit 후 응답용 내부 결과
-```
+호출·commit·응답의 순서도는 [Service return과 transaction 완료](spring-boot-internals.md#service의-return과-transaction-완료),
+경쟁 요청의 동작 이유는 [같은 키와 재고 경합](spring-boot-internals.md#같은-키와-남은-재고가-경쟁할-때)을 봅니다.
 
 public Service 메서드의 `@Transactional(rollbackFor = Exception.class)`가 업무 경계입니다.
 Controller는 생성자에 주입된 proxy를 호출하고 self-invocation이나 직접 new 호출에 의존하지 않습니다.

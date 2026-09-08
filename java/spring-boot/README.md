@@ -2,7 +2,7 @@
 
 Java 25 · Spring Boot 4.1.1 · Spring Data JPA 4.1.1 · Hibernate 7.4.5.Final · H2 2.4.240.
 Java major의 정본은 `.java-version`, 의존성의 정본은 Gradle 설정과 생성된 lockfile입니다.
-JDK·JVM·빌드 도구의 역할은 [JDK와 실행 이해](../../design/implementations/spring-boot-jdk.md),
+예약 코드·transaction·JPA의 내부 동작은 [로직과 내부 동작](../../design/implementations/spring-boot-internals.md),
 설계·시험 상세는 [Spring Boot 설계](../../design/implementations/spring-boot.md)를 봅니다.
 
 ## 빌드와 DB 없는 실행
@@ -86,6 +86,12 @@ DB transaction 지표는 실제 완료 callback에서 기록하며 재생·seed 
 지표 label에 키·request ID·원시 URL을 넣지 않습니다.
 
 ## 환경과 컨테이너
+
+Gradle toolchain과 중앙 Compose의 Docker build arg는 `.java-version`을 읽습니다.
+이 파일은 Java major만 지정하며 JDK를 설치하지 않습니다. 로컬 JDK는 직접 준비하고
+`gradlew`의 `JAVA_HOME`과 start script가 사용하는 `PATH`의 Java를 맞춥니다.
+Docker는 Temurin JDK로 빌드하고 JRE로 실행하며, major 태그는 patch까지 고정하지 않습니다.
+`bootJar` 단독 실행에는 테스트가 포함되지 않으므로 검증할 때는 앞의 `clean test bootJar` 명령을 사용합니다.
 
 `.env.example`은 Compose용 입력 예시입니다.
 Boot와 start script는 이 파일을 자동으로 읽지 않습니다. native 실행에서는 셸 환경으로 전달합니다.

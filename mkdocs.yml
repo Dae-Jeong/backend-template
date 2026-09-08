@@ -72,7 +72,7 @@ nav:
           - 구현 설계: design/implementations/nestjs.md
           - 폴더와 역할: design/implementations/nestjs-structure.md
       - Spring Boot:
-          - JDK와 실행 이해: design/implementations/spring-boot-jdk.md
+          - 로직과 내부 동작: design/implementations/spring-boot-internals.md
           - 구현 설계: design/implementations/spring-boot.md
           - 폴더와 역할: design/implementations/spring-boot-structure.md
       - 공통 설계:
