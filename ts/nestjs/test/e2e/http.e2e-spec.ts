@@ -13,6 +13,10 @@ import { Logging } from '../../src/observability/logging.js';
 
 @Controller('test')
 class TestController {
+  @Get('items/:id')
+  item(): { data: { found: boolean } } {
+    return { data: { found: true } };
+  }
   @Get('error') error(): never {
     throw new Error('private-error');
   }
@@ -162,6 +166,20 @@ describe('HTTP contract', () => {
     expect(metrics.text).toContain('route="unmatched"');
     expect(metrics.text).not.toContain('private');
     expect(metrics.text).not.toContain('route="/health/live"');
+  });
+  it('uses the registered parameter template for distinct resource IDs', async () => {
+    await request(app.getHttpServer()).get('/test/items/private-1').expect(200);
+    await request(app.getHttpServer()).get('/test/items/private-2').expect(200);
+    const values = (await app.get(Metrics).requests.get()).values;
+    expect(values).toHaveLength(1);
+    expect(values[0]).toMatchObject({
+      value: 2,
+      labels: { route: '/test/items/:id' },
+    });
+    const metrics = await request(app.getHttpServer())
+      .get('/metrics')
+      .expect(200);
+    expect(metrics.text).not.toContain('private-');
   });
   it('keeps the original response when recording fails and exposes the failure', async () => {
     vi.spyOn(app.get(Metrics).requests, 'inc').mockImplementation(() => {

@@ -21,12 +21,7 @@ import { Shutdown } from './bootstrap/shutdown.js';
 
 @Module({
   imports: [],
-  controllers: [
-    GreetingsController,
-    HealthController,
-    MetricsController,
-    ReservationsController,
-  ],
+  controllers: [GreetingsController, HealthController, MetricsController],
   providers: [
     GreetingsService,
     clockProvider,
@@ -35,10 +30,6 @@ import { Shutdown } from './bootstrap/shutdown.js';
     Logging,
     { provide: APP_FILTER, useClass: ProblemFilter },
     { provide: APP_INTERCEPTOR, useClass: ExecutionInterceptor },
-    ReservationsService,
-    Primary,
-    DatabaseMetrics,
-    ReservationsRepository,
     Shutdown,
   ],
 })
@@ -46,7 +37,18 @@ export class AppModule {
   static register(settings: Settings): DynamicModule {
     return {
       module: AppModule,
-      providers: [{ provide: Settings, useValue: settings }],
+      controllers: settings.databaseFilename ? [ReservationsController] : [],
+      providers: [
+        { provide: Settings, useValue: settings },
+        ...(settings.databaseFilename
+          ? [
+              ReservationsService,
+              Primary,
+              DatabaseMetrics,
+              ReservationsRepository,
+            ]
+          : []),
+      ],
     };
   }
 }

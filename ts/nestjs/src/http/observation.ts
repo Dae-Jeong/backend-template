@@ -22,11 +22,14 @@ export class Observation {
   constructor(
     readonly id: string,
     private readonly method: string,
-    private readonly route: string,
+    private route: string,
     private readonly excluded: boolean,
     private readonly metrics: Metrics,
     private readonly logging: Logging,
   ) {}
+  setRouteTemplate(template: unknown): void {
+    if (typeof template === 'string') this.route = template;
+  }
   endExecution(unexpected = false): void {
     this.unexpected ||= unexpected;
     this.execution = this.unexpected ? 'error' : 'returned';
@@ -83,10 +86,14 @@ export function observeHttp(
       logging,
     );
     states.set(response, state);
-    response.once('finish', () => state.endTransport(response, true));
-    response.once('close', () =>
-      state.endTransport(response, response.writableFinished),
-    );
+    const endTransport = (complete: boolean) => {
+      // Express public req.route.path is the registered template, never the URL.
+      const route = request.route as { path?: unknown } | undefined;
+      state.setRouteTemplate(route?.path);
+      state.endTransport(response, complete);
+    };
+    response.once('finish', () => endTransport(true));
+    response.once('close', () => endTransport(response.writableFinished));
     response.once('error', () => state.endExecution(true));
     if (excluded) state.endExecution();
     next();

@@ -58,7 +58,7 @@ describe('DB initialization and observation failure', () => {
       await database.close();
     }
   });
-  it('DB-disabled mode is ready and rejects reservation without acquiring resources', async () => {
+  it('DB-disabled mode is ready and omits reservation routes, schema and providers', async () => {
     const app = await createApp(readSettings({ LOG_LEVEL: 'silent' }));
     try {
       await request(app.getHttpServer())
@@ -68,8 +68,17 @@ describe('DB initialization and observation failure', () => {
         .post('/v1/reservations')
         .set('Idempotency-Key', 'key')
         .send({ product_id: 'widget' })
-        .expect(503);
-      expect(app.get(Primary).pool).toBeUndefined();
+        .expect(404);
+      await request(app.getHttpServer()).get('/v1/reservations').expect(404);
+      const schema = await request(app.getHttpServer())
+        .get('/openapi.json')
+        .expect(200);
+      expect(schema.body.paths).not.toHaveProperty('/v1/reservations');
+      expect(() => app.get(Primary)).toThrow();
+      expect(() => app.get(DatabaseMetrics)).toThrow();
+      expect(
+        (await request(app.getHttpServer()).get('/metrics')).text,
+      ).not.toContain('db_transactions_total');
     } finally {
       await app.close();
     }
