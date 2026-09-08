@@ -1,6 +1,6 @@
 # TypeScript / NestJS 구현 설계
 
-Status: 구현 준비 설계안 · 코드 미구현·런타임 미검증 · 2026-09-08
+Status: SQLite 예약·동시성·멱등성 구현 및 네이티브 검증 · 컨테이너·공유 관측 통합은 중앙 검증 대기 · 2026-09-08
 
 이 문서는 NestJS의 조립·DI·수명·HTTP·저장 경계를 소유합니다.
 파일 배치는 [폴더와 역할](nestjs-structure.md), 착수 순서는 [작업 계획](nestjs-tasks.md),
@@ -9,18 +9,20 @@ Status: 구현 준비 설계안 · 코드 미구현·런타임 미검증 · 2026
 
 ## 기본 선택
 
-| 항목 | 준비 방향 |
+| 항목 | 구현 선택 |
 | --- | --- |
 | 위치·도구 | `ts/nestjs/`, pnpm, 공식 Nest CLI로 생성합니다. |
 | HTTP | 첫 구현은 기본 Express adapter로 시작합니다. Fastify 전환은 별도 검증합니다. |
 | 앱 조립 | 첫 프로젝트 Module은 `AppModule` 하나입니다. 내장 DI에 Controller와 Provider를 등록합니다. |
 | 코드 스타일 | Controller·주입받는 Service는 클래스, 값 변환·계산은 일반 함수와 readonly 타입을 사용합니다. |
 | 테스트 | `src/` 옆 `test/`에 단위·통합·HTTP 시험을 둡니다. |
-| 로컬 주소 | [중앙 포트 배정](README.md#로컬-포트-배정)을 사용합니다. 아직 서버를 실행하지 않았습니다. |
+| 로컬 주소 | [중앙 포트 배정](README.md#로컬-포트-배정)에 따라 native 18083을 검증했습니다. 컨테이너 18084는 중앙 검증 대기입니다. |
 
-Node.js·Nest·pnpm의 정확한 버전과 ESM/CommonJS는 Task 1에서 함께 고정합니다.
-공식 CLI의 생성 결과와 의존성 지원 범위를 확인한 뒤 Node 버전 파일·`packageManager`·lockfile에 반영합니다.
-테스트 runner·lint 도구도 그 생성 결과를 기준으로 정합니다. FastAPI 도구 이름을 그대로 옮기지 않습니다.
+Node.js 24.20.0 LTS·Nest 12.0.1·CLI 12.0.0·pnpm 12.3.4를 고정했습니다.
+Node 정확 버전은 `.node-version`, pnpm 정확 버전은 `packageManager`가 소유하며
+`engines`는 호환 범위만 표현합니다. `scripts/toolchain.mjs`는 두 정본을 읽어 전역 도구 변경 없이 실행합니다.
+공식 CLI ESM 생성물과 Vitest·oxlint를 유지했습니다. 생성물은 commit `56cf0c7`에 보존했습니다.
+생성된 vite-tsconfig-paths의 TypeScript 6 peer 충돌은 Vite의 현재 내장 tsconfigPaths로 대체해 제거했습니다.
 [Nest CLI](https://docs.nestjs.com/cli/usages)는 프로젝트 생성과 pnpm 선택을 지원합니다. 확인일: 2026-09-08.
 
 ## DI와 앱 조립
@@ -67,7 +69,9 @@ AppModule은 참조를 연결하고 업무를 실행하지 않습니다. 프로�
 
 실행 진입점에서 `enableShutdownHooks()`를 켭니다. 시험 앱은 `app.close()`를 명시적으로 기다립니다.
 요청 scope의 자동 정리나 hook 등록만으로 초기화 실패·요청 drain이 보장된다고 가정하지 않습니다.
-선택한 adapter의 종료 대기·timeout과 부분 실패의 해제 횟수는 Task 2에서 검증합니다.
+`Shutdown`은 설정된 시간 뒤 HTTP socket을 닫습니다. `Primary`의 종료 hook은
+활성 DB lease가 반납된 뒤 worker pool을 닫으므로 socket 종료를 transaction 취소로 해석하지 않습니다.
+실제 초기화 실패·listen 실패·SIGTERM drain·socket 종료 기한·DB worker 반환을 검증했습니다.
 [Lifecycle events](https://docs.nestjs.com/fundamentals/lifecycle-events), 확인일: 2026-09-08.
 
 ## 입력·응답·예외
@@ -98,7 +102,8 @@ DI가 필요한 Filter는 Module의 `APP_FILTER`로 등록합니다. 응답이 �
 ## 로깅과 metrics
 
 수집은 해당 환경의 라이브러리를 우선하고, 앱은 [관측 계약](../observability.md)의 의미를 연결합니다.
-JSON logger·Prometheus client는 Task 4에서 호환 버전을 선택합니다. 외부 수집 서버를 새로 만드는 단계는 아닙니다.
+Pino 10.3.1과 Prometheus 공식 Node client `@prometheus-io/client` 0.16.1을 사용합니다.
+기존 `prom-client`는 공식 이전 안내가 있어 후속 패키지를 선택했습니다. 수집 서버를 새로 만들지 않았습니다.
 
 HTTP middleware가 서버 요청 ID와 전송 상태를 소유합니다. Node의 `ServerResponse`에서 `finish`는
 서버가 응답을 운영체제에 넘긴 시점이며 클라이언트 수신 보장이 아닙니다.
@@ -110,10 +115,25 @@ registry는 앱 인스턴스별로 만들고 경로 template·method·상태·�
 관측 라이브러리가 제공하지 않는 전송·실행 구분만 작은 연결 코드로 보완합니다.
 관측 실패가 원래 업무 결과를 바꾸지 않는지, 같은 요청을 두 번 기록하지 않는지는 [검증 계획](nestjs-verification.md)으로 확인합니다.
 
-## DB·트랜잭션 준비
+`contracts/observation.contract.ts`의 HTTP 결과는 `status: number | null`, 한정된
+`completion`·`execution` union을 사용합니다. 숫자→문자열 변환은 Prometheus 라벨 경계만 소유합니다.
+HTTP 관측은 `http_requests_total`, `http_request_duration_seconds`와 FastAPI의
+`method/route/status/completion/execution` 라벨 의미를 맞춥니다. 미전송 status 라벨은 `none`입니다.
+health·metrics·docs의 요약 기록은 제외하고 request ID는 반환합니다. 관측 실패 후 `/metrics`는 503입니다.
 
-DB/ORM·migration 도구는 아직 선택하지 않았습니다. SQLite 시작 여부와 PostgreSQL 전환 경로를
-Task 5에서 함께 결정합니다. 첫 DB 구성은 단일 Primary이며 Replica는 [공통 확장 계약](../backend.md#서버db-확장-전략)의 선택 확장입니다.
+## DB·트랜잭션
+
+중앙 승인으로 SQLite·Drizzle ORM 0.45.2·drizzle-kit 0.31.10·better-sqlite3 13.0.3·tarn 3.1.2를 선택했습니다.
+단일 Primary만 구현했습니다. `DB_PRIMARY_URL` 공백은 DB 비활성이며 readiness 실패가 아닙니다.
+이때 예약 controller·DB provider·OpenAPI 항목을 등록하지 않아 예약 경로는 404입니다.
+실제 native SQLite engine은 `sqlite_version()`으로 3.53.4를 확인했습니다.
+Prisma 7.10.0의 기본 SQLite adapter와 libsql 로컬 driver는 동기 실행 제약이 있고,
+Knex 3.3.0+sqlite3 6.0.1은 실제 비동기 I/O지만 sqlite3 공식 저장소의 유지보수 중단 선언이 있어 제외했습니다.
+
+better-sqlite3의 동기 I/O는 전용 Node worker 안에서만 실행합니다. Drizzle 공식 `sqlite-proxy`
+callback이 작은 SQL/결과 메시지를 기다립니다. tarn은 worker/연결의 지연 생성·획득 대기·반환을 맡습니다.
+기본 pool 상한 2, 연결 획득·잠금 timeout 각각 1000ms입니다. 잠금 대기 중 timer·health 응답을 실제 확인했습니다.
+DB 파일은 미리 공식 migration CLI로 만들며 앱은 시작 시 schema를 확인합니다. WAL·foreign keys·FULL synchronous를 사용합니다.
 
 Service가 한 업무의 트랜잭션을 열고 저장 도구가 제공하는 transaction client를 Repository 호출에 명시적으로 전달합니다.
 같은 업무의 저장은 같은 client를 사용하며 commit 완료를 기다린 다음 결과를 반환합니다.
@@ -136,17 +156,27 @@ sequenceDiagram
     C-->>C: 응답 DTO 구성
 ```
 
-그림은 설계 목표입니다. 실패 시 rollback·연결 반환·commit 실패의 오류 변환은 저장 도구 선정 후 실제 API로 구체화합니다.
+Service는 연결 lease를 얻고 Drizzle `transaction(..., { behavior: 'immediate' })`를 호출합니다.
+Repository에는 그 callback의 client만 전달합니다. 선조회·조건부 차감·예약·멱등 응답 저장을 같은
+연결에서 수행하며 공식 Drizzle API가 COMMIT/ROLLBACK을 기다립니다. 실패한 rollback 뒤 dirty 연결은 닫고 재사용하지 않습니다.
+실제 deferred foreign key COMMIT 실패·독립 프로세스 경합·commit 전후 강제 종료·응답 유실을 검증했습니다.
 HTTP가 아닌 Job·GraphQL·WebSocket도 같은 업무 메서드를 호출할 수 있지만, 프로토콜 adapter와 취소 처리는 각각 검증해야 합니다.
 Nest hook이나 DI만으로 여러 DB·외부 호출의 원자성이 생기지는 않습니다.
 
-## 구현 전에 남은 선택
+## 검증 범위와 후속 선택
 
-| 결정 시점 | 선택과 판단 기준 |
+| 영역 | 상태와 후속 |
 | --- | --- |
-| Task 1 | Node·Nest·pnpm 버전, ESM/CommonJS, 생성된 빌드·test runner 호환성을 함께 고정합니다. |
-| Task 4 | JSON logger·Prometheus client를 고르고 기존 대시보드와 지표 의미를 대조합니다. |
-| Task 5 | SQLite/PostgreSQL 출발점과 저장·migration 도구를 고릅니다. 트랜잭션 전달·잠금·pool 계측 가능성이 기준입니다. |
+| HTTP | 현재 정적 API 경로는 공식 Swagger 생성 path/method로 405를 판정합니다. 관측은 공개 Express `req.route.path`를 사용하며 매개변수 template 집계를 시험했습니다. private router 접근은 없습니다. 동적 경로의 405·다른 adapter는 추가 시험이 필요합니다. |
+| 수집·컨테이너 | Dockerfile·시작 script는 구현했습니다. Compose·Prometheus·Grafana 실제 연결과 MkDocs 통합은 중앙 검증 대기입니다. |
+| PostgreSQL | driver·schema·migration 교체 뒤 해당 DB의 경합·복구 시험을 다시 수행해야 합니다. 인스턴스를 만들지 않았습니다. |
+| 운영 | 인증·감사 영속성·외부 SDK·네트워크 파일시스템·OS stdout 장애·부하 지연/용량 보장은 미검증입니다. |
 
 예약의 API 의미는 [기존 예약 예제](fastapi.md#예약-업무-계약)와 비교하되 SQLite 고유 SQL·잠금 구현은 옮겨 쓰지 않습니다.
-구현·실행 명령과 실제 결과는 완성된 단계부터 사용 가이드와 검증 기록에 올립니다.
+실행 명령은 [NestJS 사용 안내](../../ts/nestjs/README.md), 실제 결과는 [검증 기록](nestjs-verification.md)에 있습니다.
+
+공식 근거(확인일 2026-09-08): [Nest 12 migration](https://docs.nestjs.com/migration-guide),
+[Node LTS](https://nodejs.org/en/about/previous-releases), [Drizzle proxy](https://orm.drizzle.team/docs/connect-drizzle-proxy),
+[tarn pool](https://github.com/Vincit/tarn.js), [sqlite3 유지보수 상태](https://github.com/TryGhost/node-sqlite3),
+[libsql 로컬 구현](https://github.com/tursodatabase/libsql-client-ts/blob/main/packages/libsql-client/src/sqlite3.ts),
+[Prometheus Node client](https://github.com/prometheus/client_js).

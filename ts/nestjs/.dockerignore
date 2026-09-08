@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+test
+data
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+*.tsbuildinfo
