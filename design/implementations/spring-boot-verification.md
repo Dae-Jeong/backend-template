@@ -7,6 +7,10 @@ Status: 실제 구현·검증 결과 · 2026-09-08
 
 ## 환경과 명령
 
+Task 9 (`6025aaf`)에서 Spring Data JPA **4.1.1**, Hibernate **7.4.5.Final**, Jakarta Persistence **3.2.0**으로
+전환했습니다. 나머지 아래 버전은 유지했습니다. Boot 관리 버전을 사용하며 별도 Hibernate override는 없습니다.
+이전 JDBC 구현의 실행·통합 기록은 아래에 보존하고 현재 JPA 결과는 다음 절에서 구분합니다.
+
 | 항목 | 확인값 |
 | --- | --- |
 | Initializr·Boot | 4.1.1 |
@@ -42,6 +46,51 @@ Java compiler `-Xlint:all,-processing,-serial`·`-Werror`와 strict dependency l
 lockfile 생성은 공식 `./gradlew test bootJar --write-locks`로 수행했습니다.
 migration 파일은 공식 `flyway help add` 확인 후 `flyway add -add.version=1|2 -add.timestamp=never ...`로 만들었습니다.
 
+## Task 9 JPA 검증
+
+2026-09-08, 기존 `origin/main`을 정상 fast-forward merge한 뒤 승인 설계 `4301427`을 먼저 기록했습니다.
+프로젝트 시험용 JDK는 `/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home`을 사용했고 머신 기본값은 변경하지 않았습니다.
+Gradle `--help`와 공식 locking 문서를 확인했습니다. Gradle에는 dependency add 명령이 없으므로
+DSL의 starter를 변경한 뒤 공식 dependency resolution 명령으로 lockfile을 생성했습니다.
+
+```sh
+cd java/spring-boot
+JAVA_HOME=/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home ./gradlew --help
+JAVA_HOME=/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home ./gradlew dependencies --write-locks --no-daemon --console=plain
+JAVA_HOME=/tmp/spring-jdk25/jdk-25.0.4.1+1/Contents/Home ./gradlew clean test bootJar --no-daemon --console=plain
+```
+
+최종 명령은 strict lock·compiler 경고 오류화 상태로 **34개 시험·11 suites·실패 0·오류 0·skip 0**,
+35초에 통과했습니다. 전체 HTTP·독립 JVM·종료 시험을 포함하며 기존 실패 검증을 제거하거나 완화하지 않았습니다.
+JUnit XML·HTML 위치는 기존과 같고 실행 로그는 `/tmp/spring-jpa-final.log`입니다.
+앞선 실행은 pool timeout 예외 포장과 ProcessWorker의 JDBC manager 가정 때문에 실패했고 수정 후 전체 재검증했습니다.
+새 시험의 schema 오류 메시지·rollback 예외 기대값도 실제 Hibernate 7.4.5/Spring 7 동작으로 정정했습니다.
+
+| 실제 시험 | JPA 전환 증거 |
+| --- | --- |
+| JpaPersistenceTest | manager Bean 정확히 1개·JpaTransactionManager, pending seed flush, bulk UPDATE 후 기존 entity detach·재조회 stock 1·독립 연결 commit 상태 |
+| JpaPersistenceTest | 두 public proxy transaction이 barrier 뒤 동일 claim을 persist·flush, 승자 1·IdempotencyClaimed 1·committed 1·rolled_back 1·DB claim 1 |
+| JpaPersistenceTest | batch_size=16·order_inserts=true에서도 claim 충돌 분류와 FK 순서 성공, 결과 CHECK 실패 때 stock·claim·예약·결과 모두 이전 상태 |
+| TransactionFailureTest | 실제 Connection.commit gate 중 HTTP 미완료·committed 미증가, 실패500·전체 rollback·failed 1·동일키 재시도 성공 |
+| TransactionFailureTest | CHECK 및 예약 product UNIQUE의 flush 실패는500, claim 충돌로 재생하지 않음·전체 rollback·성공 counter 없음 |
+| TransactionFailureTest | 실제 rollback 실행 뒤 SQLException 주입 시 JpaSystemException·failed 1·rolled_back/committed 0·독립 연결 상태 보존 |
+| HttpDatabaseTest | 실제 pool 포화503·H2 lock timeout503·키/상품별 경합·정확한 replay와 HTTP 계약 유지 |
+| LifecycleTest | no-db에는 DataSource·EntityManagerFactory·transaction manager·ProductRepository 없음, 예약404·readiness200 |
+| LifecycleTest | available을 VARCHAR로 변경하면 SchemaManagementException으로 시작 실패, Hibernate가 schema를 복구하지 않음 |
+| MigrationTest | V1 데이터를 V2로 올린 뒤 JPA 시작·9자리 소수 timestamp의 정확한 HTTP body201 재생 |
+| ProcessRecoveryTest | JpaTransactionManager callback으로 기존 독립 JVM same/different-key·commit 전후 kill·embedded 재시작 4개 시험 유지 |
+
+`ddl-auto=validate`는 Hibernate가 호환으로 판단하는 타입을 허용합니다. INTEGER→BIGINT widening은 통과했으며,
+모든 schema 차이를 탐지한다고 주장하지 않습니다. CHECK·FK·unique·migration history는 Flyway와 실제 DB 시험으로 검증합니다.
+V1/V2 파일·기존 문자열 UTC column은 변경하지 않았으며 추가 migration도 없습니다.
+claim 분류는 현재 H2 claim table의 단일 PK와 Hibernate INSERT SQL에 의존합니다.
+다른 unique 제약을 해당 table에 추가하거나 DB/provider를 바꿀 때는 분류 시험을 갱신해야 합니다.
+
+rollback 장애 주입은 실제 rollback 후 acknowledgement 오류를 모사합니다. DB가 rollback 자체를 거부하거나
+commit 결과가 불명인 물리 장애에서 데이터 원자성·자동 복구를 증명하지 않습니다.
+JPA 전환 후 Docker18086·기존 중앙 H2 volume·Prometheus와 문서 PC 렌더링 최종 확인은 중앙 담당이며,
+아래 이전 JDBC 이미지의 검증을 JPA 이미지 결과로 재사용하지 않습니다.
+
 ## 실행한 시험
 
 | 시험 | 확인 내용 |
@@ -66,7 +115,7 @@ migration 파일은 공식 `flyway help add` 확인 후 `flyway add -add.version
 TCP 시험은 중앙 승인 아래 127.0.0.1·OS 임시포트·임시파일을 쓰며 자기 프로세스만 종료합니다.
 embedded 파일의 다중 JVM 접근 제한을 TCP 시험과 구분합니다.
 
-commit 실패는 실제 JdbcTransactionManager의 Connection.commit 호출 지점에 SQLException을 주입합니다.
+Task 1–8의 commit 실패는 JdbcTransactionManager, Task 9는 JpaTransactionManager의 실제 Connection.commit 호출 지점에 SQLException을 주입합니다.
 H2가 deferred FK를 지원한다고 가정하지 않으며 물리 디스크 고장을 일으키지 않습니다.
 관측 counter는 실패 1·committed 0과 영속 상태를 대조한 뒤 재시도 성공을 확인합니다.
 

@@ -1,6 +1,6 @@
 # Java / Spring Boot 구현 설계
 
-Status: Task 1–8 완료 · Task 9 JPA 전환 승인·구현 중 · 2026-09-08
+Status: Task 1–9 구현·자동 검증 완료 · JPA 중앙 통합 검증 별도 · 2026-09-08
 
 ## Task 9 승인 설계
 
@@ -40,7 +40,7 @@ flowchart LR
 | 빌드 | Boot 4.1.1, Wrapper 9.7.1, strict dependency lock |
 | 시간 | Clock Bean, 내부 Instant·UTC |
 | HTTP | DTO·내부 contract 분리, 명시적 data 응답·Problem Details |
-| DB | 선택 활성화되는 단일 Primary H2 2.4.240, JdbcClient·Hikari |
+| DB | 선택 활성화되는 단일 Primary H2 2.4.240, Spring Data JPA 4.1.1·Hibernate 7.4.5.Final·Hikari |
 | migration | Boot 관리 Flyway 12.4.0, 공식 Flyway CLI 13.4.0 add로 파일 생성 |
 | 관측 | Actuator·Micrometer·SLF4J·Boot ECS JSON |
 | 문서 | Springdoc 3.1.1, 실제 OpenAPI HTTP 응답 검증 |
@@ -61,7 +61,9 @@ Clock 같은 실제 공유 의존성만 config의 Bean으로 조립하며 interf
 `DatabaseEnvironment`는 Boot 4의 EnvironmentPostProcessor로 config data를 읽은 뒤 Bean 조립 전에 실행됩니다.
 DB URL이 비면 no-db profile·auto-configuration 제외·readiness 구성을 설정합니다.
 DB 비활성은 정상 상태이며 인사·health·metrics·docs가 동작하고 예약 Controller·Service·Repository가 없습니다.
-DB를 켜면 Flyway가 먼저 schema를 검증·적용하고 Hikari를 통해 Primary에 연결합니다.
+DB를 켜면 Flyway가 먼저 migration을 검증·적용하고 Hibernate가 entity mapping과 schema를 검증합니다.
+Hikari를 통해 Primary에 연결하며 schema 생성·수정은 Flyway만 소유합니다.
+Hibernate validate는 모든 CHECK·FK·길이 제약 검사의 대체물이 아니므로 migration history와 실제 DB 시험을 함께 유지합니다.
 잘못된 앱 환경·pool 범위는 시작 실패입니다. 시작 중간 실패와 종료에서 획득한 pool을 닫습니다.
 graceful shutdown은 유한 시간이며 테스트에서는 SIGTERM 중 진행 HTTP 요청의 완료와 파일 잠금 해제를 확인합니다.
 
@@ -113,7 +115,10 @@ Controller는 생성자에 주입된 proxy를 호출하고 self-invocation이나
 Repository는 commit하지 않습니다. 기본 REQUIRED·단일 Primary만 사용합니다.
 
 V2 migration은 초기 guard 행을 제거하고 `reservation_claims`의 unique key로 키별 소유권을 보호합니다.
-같은 키의 중복 INSERT는 DB에서 경쟁 transaction의 완료를 기다립니다.
+같은 키의 entity persist·즉시 flush INSERT는 DB에서 경쟁 transaction의 완료를 기다립니다.
+H2 23505와 Hibernate가 보고한 claim INSERT SQL을 함께 확인해 충돌을 번역합니다.
+이 분류는 현재 reservation_claims의 유일한 unique 제약인 idempotency_key PK에 한정한 H2/Hibernate 구현입니다.
+이 table에 다른 unique 제약을 추가하거나 DB/provider를 교체하면 분류와 경합 시험도 변경해야 합니다.
 충돌이 확정되면 실패한 transaction이 rollback된 뒤 ReservationAttempts가 새로운 Primary 조회를 호출합니다.
 이 경계는 실제 unique 충돌 복구만 담당하며 업무 전체의 무제한 자동 재시도가 아닙니다.
 다른 상품·다른 키는 전역 잠금 없이 독립 진행합니다.
@@ -121,11 +126,14 @@ V2 migration은 초기 guard 행을 제거하고 `reservation_claims`의 unique 
 실패한 요청은 claim도 rollback합니다. 멱등 결과에는 만료·인증 scope를 추가하지 않았습니다.
 
 H2 lock timeout은 DATABASE_BUSY 503, Hikari pool 획득 timeout은 DATABASE_POOL_TIMEOUT 503과 Retry-After 1로 번역합니다.
-pool timeout은 Spring 연결/transaction 시작 예외의 직접 원인이 확인된 SQLTransientConnectionException인 경우로
-제한합니다. 그 외 transaction 시작·연결 실패는 INTERNAL_ERROR 500이며 pool timeout으로 위장하지 않습니다.
-JdbcTransactionManager는 commit 실패 때 rollback하도록 설정했고 실제 JDBC commit 호출 경계의 장애 주입으로
+pool timeout은 Spring 연결/transaction 시작 예외의 직접 원인 또는 Hibernate JDBCConnectionException의
+SQLException이 SQLTransientConnectionException인 경우로 제한합니다.
+그 외 transaction 시작·연결 실패는 INTERNAL_ERROR 500이며 pool timeout으로 위장하지 않습니다.
+JpaTransactionManager는 commit 실패 때 rollback하도록 설정했고 실제 JDBC commit 호출 경계의 장애 주입으로
 HTTP 500·독립 연결의 전체 rollback·같은 키 재시도를 확인했습니다.
 이 시험은 실제 파일시스템 고장이나 H2가 이미 commit한 뒤 결과가 불명인 상황의 자동 복구 보장이 아닙니다.
+기본 JDBC batch는 비활성이며 성능 최적화를 주장하지 않습니다. 시험에서는 batch_size=16·order_inserts=true도
+적용해 association 기반 FK INSERT 순서, claim unique flush, 실패 결과의 전체 rollback을 확인합니다.
 
 ## 로그·metrics
 
@@ -154,6 +162,10 @@ Service return은 계측 시점이 아닙니다. 재생·seed도 transaction 수
 - [Springdoc 호환](https://springdoc.org/#what-is-the-compatibility-matrix-of-springdoc-openapi-with-spring-boot)
 - [H2 연결 모드](https://www.h2database.com/html/features.html#connection_modes)
 - [Spring transaction proxy](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html)
+- [Boot JPA 구성](https://docs.spring.io/spring-boot/reference/data/sql.html#data.sql.jpa-and-spring-data)
+- [Spring Data persist/merge](https://docs.spring.io/spring-data/jpa/reference/jpa/entity-persistence.html)
+- [Spring Data modifying query](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html#jpa.modifying-queries)
+- [JpaTransactionManager](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/orm/jpa/JpaTransactionManager.html)
 - [Boot 구조화 로그](https://docs.spring.io/spring-boot/reference/features/logging.html#features.logging.structured)
 - [Flyway CLI](https://documentation.red-gate.com/flyway/reference/usage/command-line)
 - [Spring 7.0.9 Servlet flush 구현](https://github.com/spring-projects/spring-framework/blob/v7.0.9/spring-web/src/main/java/org/springframework/http/server/ServletServerHttpResponse.java)

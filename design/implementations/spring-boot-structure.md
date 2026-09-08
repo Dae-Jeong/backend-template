@@ -13,6 +13,8 @@ flowchart LR
     A --> R["repositories"]
     A --> CONTRACT["contracts"]
     R --> CONTRACT
+    R --> ENTITY["repositories의 JPA entities"]
+    R --> DATA["Spring Data repositories"]
     OBS["observation"] -. 완료 계측 .-> A
 ```
 
@@ -24,7 +26,7 @@ flowchart LR
 | config/DatabaseEnvironment | 빈 DB URL의 초기 no-db 조립 |
 | config/AppProperties, PoolProperties | 환경·pool 입력 검증 |
 | config/ClockConfiguration | Clock Bean |
-| config/TransactionConfiguration | 단일 JDBC manager·rollback-on-commit-failure·listener |
+| config/TransactionConfiguration | 단일 JpaTransactionManager·rollback-on-commit-failure·listener |
 | config/SeedConfiguration | 명시적 CLI seed의 입력과 호출 |
 | config/OpenApiConfiguration | 공개 Problem schema·오류 응답 문서 |
 | controllers | HTTP 입력·업무 호출·외부 DTO 변환 |
@@ -35,13 +37,17 @@ flowchart LR
 | services/GreetingService | Clock을 사용한 내부 Greeting 생성 |
 | services/ReservationService | public transaction·예약/seed/replay |
 | services/ReservationAttempts | unique claim 실패 transaction 종료 뒤 재생 transaction 호출 |
-| repositories/ReservationRepository | SQL·row mapping·claim·조건부 재고·저장 |
+| repositories/ReservationRepository | entity persist·claim flush·contract 변환·저장 조합 |
+| repositories/ProductRepository, ReservationReplayRepository | Spring Data 조회·존재 확인·조건부 JPQL 재고 차감 |
+| repositories/*Entity, UtcTimestampConverter | 기존 H2 table·FK association·VARCHAR UTC timestamp mapping |
 | contracts | 프레임워크 독립적인 Greeting, Reservation, ReservationResult |
 | exceptions | 업무 거절 Reason·내부 IdempotencyClaimed |
 | observation/TransactionMetrics | 실제 transaction 완료 listener |
 | observation/SafeLoggingCustomizer | Boot JSON 출력의 민감 원문 정제 |
 
-JDBC RowMapper가 바로 내부 contract를 만들므로 중복된 저장 row 모델은 만들지 않습니다.
+Entity는 repositories 경계 안에서만 사용하며 저장 결과를 프레임워크 독립 contract로 변환합니다.
+신규 assigned ID에는 EntityManager.persist를 사용하고 조회·조건부 변경은 Spring Data 메서드로 표현합니다.
+별도 Base·interface/Impl·Facade 또는 entity와 같은 필드의 추가 도메인 객체는 만들지 않습니다.
 업무는 SQL·Servlet·HTTP DTO를 import하지 않습니다.
 ReservationAttempts는 단순 전달용 wrapper가 아니라 unique claim 충돌의 transaction 간 복구 책임을 가집니다.
 새 업무의 transaction은 public Service proxy 경계에 두며 같은 객체 내부 호출에 transaction 적용을 기대하지 않습니다.
@@ -51,7 +57,8 @@ ReservationAttempts는 단순 전달용 wrapper가 아니라 unique claim 충돌
 `db/migration/`에는 공식 CLI로 만든 V1·V2가 있으며 기존 schema를 변경할 때 새 migration을 추가합니다.
 
 `src/test/java/`에는 순수 Clock·MDC·관측 격리 시험, 실제 HTTP/file DB 시험,
-JDBC commit 실패 주입, migration 보존, 초기화·종료, 독립 JVM 경합·복구 시험이 있습니다.
+JPA manager의 실제 JDBC commit/rollback 실패 주입, flush·stale entity·batch 순서,
+migration 보존·schema validate·초기화·종료·독립 JVM 경합·복구 시험이 있습니다.
 ProcessWorker·ShutdownWorker는 테스트 전용이며 배포 JAR에 들어가지 않습니다.
 
 `.java-version`, Wrapper, build.gradle.kts, gradle.lockfile이 빌드 입력을 소유합니다.
