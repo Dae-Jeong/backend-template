@@ -96,6 +96,8 @@ V2 migration은 초기 guard 행을 제거하고 `reservation_claims`의 unique 
 실패한 요청은 claim도 rollback합니다. 멱등 결과에는 만료·인증 scope를 추가하지 않았습니다.
 
 H2 lock timeout은 DATABASE_BUSY 503, Hikari pool 획득 timeout은 DATABASE_POOL_TIMEOUT 503과 Retry-After 1로 번역합니다.
+pool timeout은 Spring 연결/transaction 시작 예외의 직접 원인이 확인된 SQLTransientConnectionException인 경우로
+제한합니다. 그 외 transaction 시작·연결 실패는 INTERNAL_ERROR 500이며 pool timeout으로 위장하지 않습니다.
 JdbcTransactionManager는 commit 실패 때 rollback하도록 설정했고 실제 JDBC commit 호출 경계의 장애 주입으로
 HTTP 500·독립 연결의 전체 rollback·같은 키 재시도를 확인했습니다.
 이 시험은 실제 파일시스템 고장이나 H2가 이미 commit한 뒤 결과가 불명인 상황의 자동 복구 보장이 아닙니다.
