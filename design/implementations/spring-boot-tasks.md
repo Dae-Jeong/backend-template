@@ -1,6 +1,6 @@
 # Spring Boot 단계별 구현 task
 
-Status: Task 1–9 구현·자동 검증 완료 · JPA 컨테이너·공유 수집 통합 검증 별도 · 2026-09-08
+Status: Task 1–9 구현·자동 시험·JPA 컨테이너·공유 수집·가이드 통합 검증 완료 · 2026-09-08
 
 실행 명령은 [사용 가이드](../../java/spring-boot/README.md), 시험 결과·미검증은
 [검증 기록](spring-boot-verification.md)이 소유합니다.
@@ -44,6 +44,7 @@ Java 구현의 JdbcClient 저장 경계를 JPA entity·Spring Data repository로
 결과:
 - `4301427` 승인 설계, `6025aaf` 구현·시험. 기존 V1/V2 migration 수정은 없습니다.
 - EntityManager persist·Spring Data 조회/조건부 JPQL·VARCHAR UTC mapping, 단일 JpaTransactionManager가 구현됐습니다.
-- JPA flush 경합·stale entity·batch FK 순서·전체 rollback·실제 commit/rollback 실패·no-db·schema mismatch·기존 nanosecond HTTP 재생을 확인했습니다.
+- JPA flush 경합·stale entity·batch FK 순서·전체 rollback·commit 실패·rollback 응답 실패·no-db·schema mismatch·기존 nanosecond HTTP 재생을 확인했습니다.
 - `./gradlew clean test bootJar --no-daemon --console=plain`이 34개·11 suites·실패/오류/skip 0으로 통과했습니다.
-- 사용·구조·설계·검증 문서를 갱신했습니다. 공유 파일·Docker18086·영속 기존 데이터·Prometheus 최종 확인은 중앙 통합 담당입니다.
+- 사용·구조·설계·검증 문서와 공통 구현 표를 갱신했습니다. Docker 18086의 기존 H2 데이터 보존·재시작 재생·동시 HTTP·Prometheus 수집도 통과했습니다.
+- 최종 통합 증거는 [JPA 로컬 통합 검증](spring-boot-verification.md#jpa-로컬-통합-검증)에 있습니다.

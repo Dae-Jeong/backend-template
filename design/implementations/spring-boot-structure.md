@@ -57,7 +57,7 @@ ReservationAttempts는 단순 전달용 wrapper가 아니라 unique claim 충돌
 `db/migration/`에는 공식 CLI로 만든 V1·V2가 있으며 기존 schema를 변경할 때 새 migration을 추가합니다.
 
 `src/test/java/`에는 순수 Clock·MDC·관측 격리 시험, 실제 HTTP/file DB 시험,
-JPA manager의 실제 JDBC commit/rollback 실패 주입, flush·stale entity·batch 순서,
+JPA manager의 JDBC commit 실패·rollback 응답 실패 주입, flush·stale entity·batch 순서,
 migration 보존·schema validate·초기화·종료·독립 JVM 경합·복구 시험이 있습니다.
 ProcessWorker·ShutdownWorker는 테스트 전용이며 배포 JAR에 들어가지 않습니다.
 

@@ -23,7 +23,7 @@ DB를 설정하지 않으면 예약 기능은 등록하지 않습니다.
 | 생성·의존성 도구 | uv | Nest CLI·pnpm | Spring Initializr·Gradle Wrapper |
 | DI | dependency layer·Depends | 생성자·Provider·주입 토큰 | 생성자·Bean·transaction proxy |
 | 첫 DB | SQLite | SQLite | H2 file |
-| DB 접근·migration | SQLAlchemy·Alembic | Drizzle·worker의 better-sqlite3·Drizzle Kit | JdbcClient·Hikari·Flyway |
+| DB 접근·migration | SQLAlchemy·Alembic | Drizzle·worker의 better-sqlite3·Drizzle Kit | Spring Data JPA·Hibernate·Hikari·Flyway |
 | 업무 transaction | Service의 session.begin | Service의 transaction callback | public Service의 @Transactional |
 
 응답 의미·업무 원자성·자원 수명은 맞추고 프레임워크의 파일 배치·실행 모델까지 동일하게 강제하지 않습니다.

@@ -33,8 +33,8 @@ cd java/spring-boot
 ```
 
 Java compiler `-Xlint:all,-processing,-serial`·`-Werror`와 strict dependency locking을 포함합니다.
-구현 commit `a65cb26` 기준 clean 빌드는 **27개 시험·10 suites·실패 0·오류 0**으로 통과했습니다.
-마지막 코드 수정 `53db988`은 아래 명령으로 영향받는 **HTTP·transaction 14개 시험·실패 0**과 bootJar를 확인했습니다.
+이전 JDBC 구현 commit `a65cb26` 기준 clean 빌드는 **27개 시험·10 suites·실패 0·오류 0**으로 통과했습니다.
+그 단계의 마지막 코드 수정 `53db988`은 아래 명령으로 영향받는 **HTTP·transaction 14개 시험·실패 0**과 bootJar를 확인했습니다.
 
 ```sh
 ./gradlew test --tests '*TransactionFailureTest' --tests '*HttpDatabaseTest' bootJar --no-daemon --console=plain
@@ -88,8 +88,37 @@ claim 분류는 현재 H2 claim table의 단일 PK와 Hibernate INSERT SQL에 �
 
 rollback 장애 주입은 실제 rollback 후 acknowledgement 오류를 모사합니다. DB가 rollback 자체를 거부하거나
 commit 결과가 불명인 물리 장애에서 데이터 원자성·자동 복구를 증명하지 않습니다.
-JPA 전환 후 Docker18086·기존 중앙 H2 volume·Prometheus와 문서 PC 렌더링 최종 확인은 중앙 담당이며,
-아래 이전 JDBC 이미지의 검증을 JPA 이미지 결과로 재사용하지 않습니다.
+JPA 전환 후 실제 이미지·기존 H2 volume·Prometheus의 중앙 확인은 다음 절에 있습니다.
+이전 JDBC 이미지의 검증과 구분합니다.
+
+## JPA 로컬 통합 검증
+
+2026-09-08 main에서 코드 `6025aaf`를 검토·통합한 뒤 공통 Compose로 새 이미지를 빌드했습니다.
+`./scripts/compose.sh spring-boot build api`의 strict locked bootJar가 통과했으며,
+실행 이미지 ID는 `sha256:d28ef99593d07802a63f2ed20732bc35299b8436d9a022d65f844a057bcb15cf`입니다.
+UID 10001·내부 8080·게시 18086·기존 데이터 volume을 유지했습니다.
+
+| 확인 | 실제 결과 |
+| --- | --- |
+| DB 비활성 이미지 | readiness·metrics·OpenAPI 200, 예약 POST 404·OpenAPI 제외, DB transaction·Hikari 지표 없음 |
+| 기존 데이터 업그레이드 | 서버 정지 후 H2 파일 백업, 기존 상품 1개·예약/멱등 결과/claim 각 3개가 JPA 실행 후에도 모든 필드 동일 |
+| 기존 HTTP 응답 | JDBC 버전의 원래 body·201·Idempotency-Replayed true가 JPA 전환 및 재시작 후 동일 |
+| 동일 키 동시 요청 | 재고 2에서 요청 6개 모두 동일 body 201, 최초 처리 1개·재생 5개 |
+| 서로 다른 키 동시 요청 | 남은 재고 1에서 요청 6개 중 성공 1개·SOLD_OUT 409 5개 |
+| 영속 상태 | 새 상품 재고 0, 새 예약·멱등 결과 각 2개, 전체 claim 5개; 기존 데이터 행 비교 일치 |
+| 오류 계약 | 다른 입력의 동일 키 409, 미존재 상품 404, 입력 오류 3종 422, GET 예약 405·Allow POST·Problem·request ID |
+| 재시작 | 기존·새 예약 모두 원래 body 재생, healthy, OOMKilled false |
+| 관측 | 새 프로세스의 실제 두 replay 후 committed 2·duration count 2, Hikari active 0·max 4, HTTP·JVM 지표 존재 |
+| Prometheus | 재시작 이후 scrape에서 spring-boot UP·committed 2·pool max 4; FastAPI·NestJS도 UP 유지 |
+
+읽기 전용 H2 Shell로 전환 전후 파일 사본을 조회해 기존 행을 비교했습니다.
+공식 `org.h2.tools.Shell -help`를 확인한 뒤 `ACCESS_MODE_DATA=r`을 사용했습니다.
+원본 백업은 `/tmp/backend-spring-jpa-backup.bA96Iq/data`, 전환 후 사본은
+`/tmp/backend-spring-jpa-after.dQejmC/data`에 보관합니다.
+HTTP 증거는 `/tmp/backend-spring-jpa-smoke-result.json`, 새 프로세스 scrape는
+`/tmp/backend-spring-jpa-metrics.prom`입니다. 임시 증거는 배포 입력이 아닙니다.
+소규모 요청 후 메모리 단일 측정은 258.8 MiB / 512 MiB이며 운영 부하·용량 보장이 아닙니다.
+MkDocs strict build와 로컬 가이드의 PC 화면에서 JPA Mermaid 흐름을 확인했습니다.
 
 ## 실행한 시험
 
@@ -123,7 +152,7 @@ Spring 7.0.9에서는 OutputStream.flush가 기본적으로 network flush가 아
 HttpServletResponse.flushBuffer로 실제 committed 상태를 만든 뒤 IOException을 발생시킵니다.
 이미 전송된 body에 Problem 응답을 덧붙이지 않는 것과 정상 전송 성공은 구분합니다.
 
-## native·이미지·재사용
+## 이전 JDBC 구현의 native·이미지·재사용
 
 native 게시 127.0.0.1:18085를 실행 직전 점유 확인 후 사용했습니다.
 임시 작업 디렉터리의 file DB에 seed→예약201→SIGTERM→새 JVM→동일body201 replay를 확인했습니다.
@@ -149,7 +178,7 @@ Compose의 127.0.0.1:18086 실행·수집기 확인 결과는 아래 통합 검�
 
 분리 작업 중 발생한 README 발행 링크 경고는 main의 문서 hook·메뉴 통합으로 해결했고 MkDocs strict build가 통과했습니다.
 
-## 로컬 통합 검증
+## 이전 JDBC 구현의 로컬 통합 검증
 
 2026-09-08 main에서 `.java-version`을 읽는 공통 Compose build와 UID 10001 실행을 확인했습니다.
 DB 비활성 시 health 200·예약 404·OpenAPI 제외, H2 활성 시 migration·seed·예약 201이 통과했습니다.
