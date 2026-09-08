@@ -1,6 +1,6 @@
 # NestJS 폴더 구조와 활용 기준
 
-Status: 배치 설계안 · 아래 경로는 생성 예정이며 현재 코드가 아닙니다 · 2026-09-08
+Status: 실제 구현 배치 · SQLite 예약까지 구현·검증 · 2026-09-08
 
 이 문서는 폴더·파일 역할과 의존 방향을 소유합니다.
 Nest 조립·수명·프로토콜 선택은 [구현 설계](nestjs.md), 진행 단계는 [작업 계획](nestjs-tasks.md)에 있습니다.
@@ -11,7 +11,7 @@ Nest 조립·수명·프로토콜 선택은 [구현 설계](nestjs.md), 진행 �
 `controllers/greetings.controller.ts`·`services/greetings.service.ts`처럼 찾습니다.
 Nest의 Controller·Provider·Module 구분을 사용하면서 물리 폴더를 feature 단위로 강제하지 않습니다.
 
-아래는 초기 앱·DI·HTTP 계약 단계까지 필요한 배치안입니다. 각 파일은 해당 책임을 구현할 때 생성합니다.
+아래는 실제 앱·DI·HTTP 계약의 배치입니다. 저장·관측 파일도 해당 책임과 함께 생성했습니다.
 
 ```mermaid
 flowchart LR
@@ -94,8 +94,11 @@ Nest는 순환 의존용 `forwardRef()`를 제공하지만 이 템플릿은 호�
 | 예약 계약 | Controller·Service·DTO·contract·error의 `reservations` 파일 | 기존 역할 폴더에서 같은 기능명으로 연결합니다. |
 | feature Module | `modules/*.module.ts` | 공개 Provider와 수명 경계가 생긴 기능만 분리합니다. |
 
-DB model의 세부 파일명은 선택한 저장 도구의 관용을 따릅니다. ORM entity인지 schema 정의인지 결정하기 전에
-빈 entity·BaseRepository·범용 transaction wrapper를 만들지 않습니다.
+실제 저장 schema는 `models/reservations.schema.ts`, CLI 생성 migration은 `drizzle/`에 있습니다.
+`database/primary.ts`는 tarn pool과 Nest 수명 hook을, `connection.ts`는 작은 worker 메시지 연결을,
+`sqlite.worker.ts`는 better-sqlite3 실행을 소유합니다. Repository는 Drizzle transaction client를 인자로 받습니다.
+`contracts/observation.contract.ts`는 HTTP·로그·metrics가 함께 쓰는 숫자 status와 한정 결과 타입을 소유합니다.
+빈 BaseRepository·범용 RPC framework는 만들지 않았습니다.
 Dockerfile·환경 예시는 `ts/nestjs/`가, 공통 Compose·모니터링 설정은 저장소 루트가 소유합니다.
 구현별 독립 Compose 파일과 동일한 수집기 구성을 복제하지 않습니다.
 
@@ -109,6 +112,8 @@ Nest 공식 CLI도 root `test/`를 생성합니다. 공식 예제의 단위 시�
 
 프로젝트·Controller·Service는 선택한 버전의 공식 CLI로 생성하고 차이를 검토한 뒤 경로를 정리합니다.
 생성기에는 역할 폴더 경로를 명시하고 실제 CLI의 `--flat`·spec 관련 지원 옵션을 확인합니다.
-현재 없는 실행 명령을 검증 완료 사용법으로 싣지 않습니다.
+공식 ESM 생성물을 유지하고 `test/unit`, `test/integration`, `test/e2e`, `test/helpers`를 추가했습니다.
+Vitest는 이 경로를 수집하고 빌드는 `src`만 포함합니다. DB worker는 빌드 결과를 사용하므로 시험 전 build가 필요합니다.
+실행·기능 추가 명령은 [사용 안내](../../ts/nestjs/README.md)를 참고합니다.
 
 소비 프로젝트는 이 배치를 바꿀 수 있습니다. 그때 import·Module 등록·test 수집·빌드 포함 범위와 가이드를 함께 바꿉니다.
