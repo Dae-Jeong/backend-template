@@ -28,7 +28,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "up{job=\"fastapi\"}",
+          "expr": "up{job=\"$job\"}",
           "legendFormat": "",
           "range": false,
           "instant": true
@@ -101,7 +101,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "expr": "sum(rate(http_requests_total{job=\"$job\"}[$__rate_interval])) and on() (min(up{job=\"$job\"}) == 1)",
           "legendFormat": "요청량",
           "range": true
         }
@@ -142,7 +142,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "((sum(rate(http_requests_total{job=\"fastapi\",status=~\"5..\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])))) / sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval]))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "expr": "((sum(rate(http_requests_total{job=\"$job\",status=~\"5..\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"$job\"}[$__rate_interval])))) / sum(rate(http_requests_total{job=\"$job\"}[$__rate_interval]))) and on() (min(up{job=\"$job\"}) == 1)",
           "legendFormat": "5xx 비율",
           "range": true
         }
@@ -184,7 +184,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"fastapi\",completion=\"complete\"}[$__rate_interval]))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"$job\",completion=\"complete\"}[$__rate_interval]))) and on() (min(up{job=\"$job\"}) == 1)",
           "legendFormat": "응답 지연 p95",
           "range": true
         }
@@ -225,7 +225,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "expr": "sum by (status) (rate(http_requests_total{job=\"$job\"}[$__rate_interval])) and on() (min(up{job=\"$job\"}) == 1)",
           "legendFormat": "{{status}}",
           "range": true
         }
@@ -266,7 +266,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum(rate(http_requests_total{job=\"fastapi\",execution!=\"returned\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"fastapi\"}[$__rate_interval])))) and on() (min(up{job=\"fastapi\"}) == 1)",
+          "expr": "(sum(rate(http_requests_total{job=\"$job\",execution!=\"returned\"}[$__rate_interval])) or on() (0 * sum(rate(http_requests_total{job=\"$job\"}[$__rate_interval])))) and on() (min(up{job=\"$job\"}) == 1)",
           "legendFormat": "실행 실패 건수 / 초",
           "range": true
         }
@@ -290,5 +290,25 @@
       },
       "description": "수집 실패 구간은 빈 구간으로 남기며 과거 표본은 유지합니다. rate는 최소 두 표본이 필요합니다. 취소·실행 예외를 세며 HTTP 5xx 비율과 별개입니다."
     }
-  ]
+  ],
+  "description": "FastAPI·NestJS의 HTTP 실행/전송 관측입니다. Spring Boot의 Micrometer 지표는 Spring Boot 대시보드에서 확인합니다.",
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "수집 대상",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "local-prometheus"
+        },
+        "query": "label_values(up{job=~\"fastapi|nestjs\"}, job)",
+        "refresh": 1,
+        "current": {
+          "text": "fastapi",
+          "value": "fastapi"
+        }
+      }
+    ]
+  }
 }

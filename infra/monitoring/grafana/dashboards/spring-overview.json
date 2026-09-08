@@ -1,7 +1,7 @@
 {
-  "uid": "backend-db-local",
-  "title": "Backend Template · Local DB",
-  "description": "FastAPI Session과 NestJS 연결 lease는 서로 다른 단위이며 점유 연결 수도 따로 봅니다. No data는 DB 미설정·수집 단절·표본 없음입니다. 획득 시간에는 새 연결과 검증 비용이 포함됩니다.",
+  "uid": "backend-spring-local",
+  "title": "Backend Template · Spring Boot",
+  "description": "Micrometer HTTP 처리·JVM·Hikari pool·업무 트랜잭션입니다. HTTP 처리는 클라이언트 수신 완료 보장이 아닙니다. DB 비활성·수집 중단·표본 없음은 No data로 구분합니다.",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
@@ -11,29 +11,11 @@
     "from": "now-15m",
     "to": "now"
   },
-  "templating": {
-    "list": [
-      {
-        "name": "job",
-        "label": "수집 대상",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "local-prometheus"
-        },
-        "query": "label_values(up{job=~\"fastapi|nestjs\"}, job)",
-        "refresh": 1,
-        "current": {
-          "text": "fastapi",
-          "value": "fastapi"
-        }
-      }
-    ]
-  },
   "panels": [
     {
       "id": 1,
       "title": "수집 상태",
+      "description": "",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -48,8 +30,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "up{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "up{job=\"spring-boot\"}",
+          "legendFormat": "{{instance}}",
           "instant": true,
           "range": false
         }
@@ -59,6 +41,10 @@
           "unit": "none",
           "noValue": "No data",
           "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
           "mappings": [
             {
               "type": "value",
@@ -92,7 +78,8 @@
     },
     {
       "id": 2,
-      "title": "점유 연결 / 설정 상한",
+      "title": "JVM heap 사용 / 상한",
+      "description": "",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -107,22 +94,22 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "db_pool_connections_in_use{job=\"$job\"} and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} 점유",
+          "expr": "sum by(instance) (jvm_memory_used_bytes{job=\"spring-boot\",area=\"heap\"}) and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "사용",
           "instant": true,
           "range": false
         },
         {
           "refId": "B",
-          "expr": "db_pool_connection_limit{job=\"$job\"} and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} 상한",
+          "expr": "sum by(instance) (jvm_memory_max_bytes{job=\"spring-boot\",area=\"heap\"}) and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "상한",
           "instant": true,
           "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "bytes",
           "noValue": "No data",
           "min": 0,
           "color": {
@@ -147,7 +134,8 @@
     },
     {
       "id": 3,
-      "title": "활성 Session / 연결 lease",
+      "title": "HTTP 처리량 · 최근 1분",
+      "description": "",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -162,15 +150,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "db_sessions_active{job=\"$job\"} and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "sum by(instance,method,uri,status) (rate(http_server_requests_seconds_count{job=\"spring-boot\",uri!~\"/metrics|/health/.*\"}[1m])) and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{method}} {{uri}} {{status}}",
           "instant": true,
           "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "reqps",
           "noValue": "No data",
           "min": 0,
           "color": {
@@ -195,7 +183,8 @@
     },
     {
       "id": 4,
-      "title": "Pool timeout · 프로세스 누적",
+      "title": "HTTP 처리 p95 · 최근 1분",
+      "description": "Micrometer의 서버 처리 시간입니다. 전체 응답 전송이나 클라이언트 수신 완료를 뜻하지 않습니다.",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -210,8 +199,71 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "db_pool_timeouts_total{job=\"$job\"} and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "histogram_quantile(0.95, sum by(instance,le) (rate(http_server_requests_seconds_bucket{job=\"spring-boot\",uri!~\"/metrics|/health/.*\"}[1m]))) and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{instance}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Hikari 점유 / 상한 / 대기",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{job=\"spring-boot\"} and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{pool}} 점유",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_max{job=\"spring-boot\"} and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{pool}} 상한",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_pending{job=\"spring-boot\"} and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{pool}} 대기",
           "instant": true,
           "range": false
         }
@@ -242,56 +294,9 @@
       }
     },
     {
-      "id": 5,
-      "title": "연결 점유 p95 · 최근 1분",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "local-prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 10,
-        "w": 12,
-        "h": 5
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(instance, le) (rate(db_pool_connection_hold_seconds_bucket{job=\"$job\"}[1m]))) and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "noValue": "No data",
-          "min": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "text"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto"
-      }
-    },
-    {
       "id": 6,
-      "title": "연결 획득 p95 · 최근 1분",
+      "title": "Hikari timeout · 프로세스 누적",
+      "description": "",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -306,15 +311,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(instance, le) (rate(db_connection_acquire_seconds_bucket{job=\"$job\"}[1m]))) and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "hikaricp_connections_timeout_total{job=\"spring-boot\"} and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{pool}}",
           "instant": true,
           "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "short",
           "noValue": "No data",
           "min": 0,
           "color": {
@@ -340,6 +345,7 @@
     {
       "id": 7,
       "title": "업무 트랜잭션 결과 · 프로세스 누적",
+      "description": "Spring TransactionExecutionListener에서 실제 종료 결과를 기록합니다. 발생하지 않은 결과 label은 없을 수 있습니다.",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -354,8 +360,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "db_transactions_total{job=\"$job\"} and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "db_transactions_total{job=\"spring-boot\"} and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{outcome}}",
           "instant": true,
           "range": false
         }
@@ -387,7 +393,8 @@
     },
     {
       "id": 8,
-      "title": "업무 트랜잭션 p95 · 최근 1분",
+      "title": "업무 트랜잭션 평균 · 프로세스 누적",
+      "description": "Micrometer summary의 sum/count입니다. histogram p95와 다른 값입니다.",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -402,8 +409,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(instance, le) (rate(db_transaction_duration_seconds_bucket{job=\"$job\"}[1m]))) and on(instance) (up{job=\"$job\"} == 1) and on(instance) db_pool_connection_limit{job=\"$job\"}",
-          "legendFormat": "{{instance}} {{outcome}}",
+          "expr": "(db_transaction_duration_seconds_sum{job=\"spring-boot\"} / db_transaction_duration_seconds_count{job=\"spring-boot\"}) and on(instance) (up{job=\"spring-boot\"} == 1)",
+          "legendFormat": "{{outcome}}",
           "instant": true,
           "range": false
         }

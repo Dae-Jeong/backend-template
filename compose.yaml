@@ -4,23 +4,31 @@ services:
     build:
       context: ${BACKEND_BUILD_CONTEXT:-./python/fastapi}
       args:
-        PYTHON_VERSION: ${BACKEND_PYTHON_VERSION:?Run ./scripts/compose.sh fastapi to read .python-version}
+        PYTHON_VERSION: ${BACKEND_PYTHON_VERSION:-}
+        NODE_VERSION: ${BACKEND_NODE_VERSION:-}
+        JAVA_VERSION: ${BACKEND_JAVA_VERSION:-}
     ports:
-      - "127.0.0.1:18081:8000"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-18081}:${BACKEND_CONTAINER_PORT:-8000}"
+    env_file:
+      - ${BACKEND_ENV_FILE:-./python/fastapi/.env.example}
     environment:
       APP_NAME: "${APP_NAME:-Backend Template}"
       SERVICE_VERSION: "${SERVICE_VERSION:-0.1.0}"
       APP_ENVIRONMENT: "${APP_ENVIRONMENT:-local}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       DB_PRIMARY_URL: "${DB_PRIMARY_URL:-}"
+      DB_USERNAME: "${DB_USERNAME:-sa}"
+      DB_PASSWORD: "${DB_PASSWORD:-}"
       DB_POOL_SIZE: "${DB_POOL_SIZE:-4}"
       DB_POOL_MAX_OVERFLOW: "${DB_POOL_MAX_OVERFLOW:-0}"
       DB_POOL_TIMEOUT_SECONDS: "${DB_POOL_TIMEOUT_SECONDS:-2}"
+      DB_POOL_TIMEOUT_MS: "${DB_POOL_TIMEOUT_MS:-2000}"
+      DB_BUSY_TIMEOUT_MS: "${DB_BUSY_TIMEOUT_MS:-1000}"
       DB_SQLITE_BUSY_TIMEOUT_SECONDS: "${DB_SQLITE_BUSY_TIMEOUT_SECONDS:-2}"
       # 컨테이너 내부 주소·포트와 종료 예산은 함께 관리합니다.
       SERVER_HOST: "0.0.0.0"
-      SERVER_PORT: "8000"
-      SHUTDOWN_TIMEOUT_SECONDS: "15"
+      SERVER_PORT: "${BACKEND_CONTAINER_PORT:-8000}"
+      SHUTDOWN_TIMEOUT_SECONDS: "${SHUTDOWN_TIMEOUT_SECONDS:-15}"
     volumes:
       - api-data:/app/data
     init: true
