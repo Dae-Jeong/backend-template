@@ -2,15 +2,22 @@
 
 Java 25 · Spring Boot 4.1.1 · Spring Data JPA 4.1.1 · Hibernate 7.4.5.Final · H2 2.4.240.
 Java major의 정본은 `.java-version`, 의존성의 정본은 Gradle 설정과 생성된 lockfile입니다.
+JDK·JVM·빌드 도구의 역할은 [JDK와 실행 이해](../../design/implementations/spring-boot-jdk.md),
 설계·시험 상세는 [Spring Boot 설계](../../design/implementations/spring-boot.md)를 봅니다.
 
 ## 빌드와 DB 없는 실행
 
-JDK 25를 설치한 경로를 현재 셸의 `JAVA_HOME`에 지정하고 PATH에 그 JDK의 bin을 추가합니다.
-전역 Java·Gradle 설정은 변경하지 않습니다.
+JDK 25를 먼저 설치합니다. 아래 `/path/to/jdk-25`를 설치 경로로 바꾸고 현재 셸에서만 지정합니다.
+`java`·`javac`가 모두 25인지, Gradle의 Launcher JVM·Daemon JVM도 의도한 JDK인지 확인합니다.
+`.java-version` 파일만으로 셸의 Java가 전환되지는 않습니다.
 
 ```sh
 cd java/spring-boot
+export JAVA_HOME='/path/to/jdk-25'
+export PATH="$JAVA_HOME/bin:$PATH"
+java --version
+javac --version
+./gradlew --version
 ./gradlew clean test bootJar --no-daemon --console=plain
 ./scripts/start.sh
 ```

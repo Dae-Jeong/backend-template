@@ -48,12 +48,8 @@ flowchart TB
 | 관측 | Actuator·Micrometer·SLF4J·Boot ECS JSON |
 | 문서 | Springdoc 3.1.1, 실제 OpenAPI HTTP 응답 검증 |
 
-Java major는 `java/spring-boot/.java-version`이 단독 소유합니다.
-Gradle toolchain은 그 파일을 읽고 중앙 Compose는 같은 값을 Docker `JAVA_VERSION` arg에 전달합니다.
-Docker 빌드도 arg와 파일 값의 일치를 검사합니다. 머신의 기본 JDK는 변경하지 않습니다.
-Initializr 최초 생성은 설치되어 있던 Java 21로 검증·commit했고 중앙 결정 후 최신 LTS 25로 올렸습니다.
-Boot가 지원하는 Gradle·Java 조합과 Springdoc의 Boot 4 지원을 공식 문서로 확인한 뒤 실제 빌드했습니다.
-버전별 실행 증거는 검증 기록이 소유합니다.
+JDK·JVM·Gradle의 역할과 `.java-version`이 빌드·실행에 적용되는 위치는
+[JDK와 실행 이해](spring-boot-jdk.md)가 소유합니다. 버전별 실행 증거는 검증 기록을 봅니다.
 
 ## 조립과 수명
 

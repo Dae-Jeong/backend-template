@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | Python / FastAPI | [로컬 실행](quickstart.md) · [환경·명령](../../python/fastapi/README.md) | [설계](fastapi.md) · [구조](fastapi-structure.md) | [Task](fastapi-tasks.md) · [검증](fastapi-verification.md) |
 | TypeScript / NestJS | [사용 안내](../../ts/nestjs/README.md) | [설계](nestjs.md) · [구조](nestjs-structure.md) | [Task](nestjs-tasks.md) · [검증](nestjs-verification.md) |
-| Java / Spring Boot | [사용 안내](../../java/spring-boot/README.md) | [설계](spring-boot.md) · [구조](spring-boot-structure.md) | [Task](spring-boot-tasks.md) · [검증](spring-boot-verification.md) |
+| Java / Spring Boot | [사용 안내](../../java/spring-boot/README.md) | [JDK·실행](spring-boot-jdk.md) · [설계](spring-boot.md) · [구조](spring-boot-structure.md) | [Task](spring-boot-tasks.md) · [검증](spring-boot-verification.md) |
 
 세 구현 모두 설정·DI·초기화/종료·health·응답 계약·로그·metrics와
 한정 수량 예약의 동시성·멱등성 예제를 제공합니다.
